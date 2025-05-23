@@ -43,6 +43,7 @@ public:
 	vk::raii::Sampler DefaultSampler = nullptr;
 
 	DDing::Camera camera;
+	Model model;
 	std::vector<FrameData> frameDatas = {};
 private:
 	void InitGUISampler();
@@ -60,7 +61,6 @@ private:
 
 	
 	DDing::Image depthImage;
-	Model model;
 
 	vk::raii::RenderPass renderPass = nullptr;
 	vk::raii::Pipeline pipeline = nullptr;

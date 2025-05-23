@@ -6,6 +6,7 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 
 #include "tiny_gltf.h"
+#include "meshoptimizer.h"
 void Model::Draw(vk::CommandBuffer commandBuffer)
 {
 
@@ -14,9 +15,9 @@ void Model::Draw(vk::CommandBuffer commandBuffer)
 
 
     commandBuffer.bindVertexBuffers(0, vertexBuffers, offsets);
-    commandBuffer.bindIndexBuffer(indexBuffer.buffer, 0, vk::IndexType::eUint32);
+    commandBuffer.bindIndexBuffer(indexBuffer[LOD].buffer, 0, vk::IndexType::eUint32);
 
-    commandBuffer.drawIndexed(static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+    commandBuffer.drawIndexed(static_cast<uint32_t>(indices[LOD].size()), 1, 0, 0, 0);
 
 }
 void Model::loadFile(std::string path)
@@ -48,7 +49,7 @@ void Model::loadFile(std::string path)
     for (const auto& mesh : model.meshes) {
 
         for (const auto& primitive : mesh.primitives) {
-
+            std::vector<uint32_t> index;
             //Index
             {
                 if (primitive.indices >= 0) {
@@ -62,12 +63,12 @@ void Model::loadFile(std::string path)
                     if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT) {
                         const uint16_t* buf = reinterpret_cast<const uint16_t*>(dataPtr);
                         for (size_t i = 0; i < count; ++i)
-                            indices.push_back(static_cast<uint32_t>(buf[i]));
+                            index.push_back(static_cast<uint32_t>(buf[i]));
                     }
                     else if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT) {
                         const uint32_t* buf = reinterpret_cast<const uint32_t*>(dataPtr);
                         for (size_t i = 0; i < count; ++i)
-                            indices.push_back(buf[i]);
+                            index.push_back(buf[i]);
                     }
                 }
             }
@@ -113,13 +114,19 @@ void Model::loadFile(std::string path)
                     vertices.push_back(v);
                 }
             }
+
+            indices.push_back(index);
         }
 
     }
 
+}
+
+void Model::initBuffer()
+{
+
     //init Buffer
     const size_t vertexBufferSize = vertices.size() * sizeof(Vertex);
-    const size_t indexBufferSize = indices.size() * sizeof(uint32_t);
 
     //Buffer 
     {
@@ -135,27 +142,14 @@ void Model::loadFile(std::string path)
             allocInfo.priority = 1.0f;
 
             vertexBuffer = DDing::Buffer(bufferInfo, allocInfo);
-            
-        }
-        //Index
-        {
-            vk::BufferCreateInfo bufferInfo{};
-            bufferInfo.setSize(indexBufferSize);
-            bufferInfo.setUsage(vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer);
 
-            VmaAllocationCreateInfo allocInfo{};
-            allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-            allocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
-            allocInfo.priority = 1.0f;
-
-            indexBuffer = DDing::Buffer(bufferInfo, allocInfo);
         }
 
     }
     //Staging & Copy
     {
         vk::BufferCreateInfo bufferInfo{};
-        bufferInfo.setSize(vertexBufferSize + indexBufferSize);
+        bufferInfo.setSize(vertexBufferSize);
         bufferInfo.setUsage(vk::BufferUsageFlagBits::eTransferSrc);
 
         VmaAllocationCreateInfo allocInfo{};
@@ -167,7 +161,6 @@ void Model::loadFile(std::string path)
         void* data = staging.GetMappedPtr();
 
         memcpy(data, vertices.data(), vertexBufferSize);
-        memcpy((char*)data + vertexBufferSize, indices.data(), indexBufferSize);
 
         app->context.immediate_submit([&](vk::CommandBuffer commandBuffer) {
             vk::BufferCopy vertexCopy{};
@@ -177,12 +170,47 @@ void Model::loadFile(std::string path)
 
             commandBuffer.copyBuffer(staging.buffer, vertexBuffer.buffer, vertexCopy);
 
+            });
+    }
+
+    for (int i = 0; i < MAX_LOD; i++) {
+
+        const size_t indexBufferSize = indices[i].size() * sizeof(uint32_t);
+        //Index
+        {
+            vk::BufferCreateInfo bufferInfo{};
+            bufferInfo.setSize(indexBufferSize);
+            bufferInfo.setUsage(vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer);
+
+            VmaAllocationCreateInfo allocInfo{};
+            allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+            allocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+            allocInfo.priority = 1.0f;
+
+            indexBuffer.push_back(DDing::Buffer(bufferInfo, allocInfo));
+        }
+        vk::BufferCreateInfo bufferInfo{};
+        bufferInfo.setSize(indexBufferSize);
+        bufferInfo.setUsage(vk::BufferUsageFlagBits::eTransferSrc);
+
+        VmaAllocationCreateInfo allocInfo{};
+        allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+
+        DDing::Buffer staging = DDing::Buffer(bufferInfo, allocInfo);
+
+        void* data = staging.GetMappedPtr();
+
+        memcpy(data, indices[i].data(), indexBufferSize);
+
+        app->context.immediate_submit([&](vk::CommandBuffer commandBuffer) {
+
             vk::BufferCopy indexCopy{};
             indexCopy.dstOffset = 0;
-            indexCopy.srcOffset = vertexBufferSize;
+            indexCopy.srcOffset = 0;
             indexCopy.size = indexBufferSize;
 
-            commandBuffer.copyBuffer(staging.buffer, indexBuffer.buffer, indexCopy);
+            commandBuffer.copyBuffer(staging.buffer, indexBuffer[i].buffer, indexCopy);
             });
     }
 }
@@ -193,11 +221,24 @@ void Model::createClusters()
 
 void Model::createLODs()
 {
+    for (int i = 1; i < MAX_LOD; i++) {
+        float threshold = 0.2f;
+        size_t target_index_count = size_t(indices[i-1].size() * threshold);
+        float target_error = 1.2e-2f;
+
+        std::vector<uint32_t> lod(indices[i-1].size());
+        float lod_error = 0.f;
+        lod.resize(meshopt_simplify(&lod[0], indices[i-1].data(), static_cast<size_t>(indices[i-1].size()), &vertices[0].position.x, static_cast<size_t>(vertices.size()), sizeof(Vertex),
+            target_index_count, target_error, /* options= */ 0, &lod_error));
+
+        indices.push_back(lod);
+    }
 }
 
 void Model::Init(std::string path) {
 
     loadFile(path);
-    createClusters();
     createLODs();
+    initBuffer();
+    createClusters();
 }
