@@ -1,0 +1,135 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="소스 파일">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="헤더 파일">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="리소스 파일">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="소스 파일\Manager">
+      <UniqueIdentifier>{562a26d2-f68c-40bc-a44f-5f0abc52b1be}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\Vulkan">
+      <UniqueIdentifier>{f267bcde-6653-42c6-8345-bbca2c1fdf0a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\Shaders">
+      <UniqueIdentifier>{c2900ea3-b6c1-4015-913f-4b01340f6b52}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\Component">
+      <UniqueIdentifier>{080e0356-4505-41c4-8cf2-43e8c1001dee}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\Input">
+      <UniqueIdentifier>{68c8dc66-01ac-442a-ac12-9a4a6fc4295a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\Input\ImGui">
+      <UniqueIdentifier>{f011f59c-a247-45c8-a630-99fb21445a2b}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Danite.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="pch.cpp">
+      <Filter>헤더 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="Context.cpp">
+      <Filter>소스 파일\Vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="RenderManager.cpp">
+      <Filter>소스 파일\Manager</Filter>
+    </ClCompile>
+    <ClCompile Include="Pipeline.cpp">
+      <Filter>소스 파일\Vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="InputManager.cpp">
+      <Filter>소스 파일\Manager</Filter>
+    </ClCompile>
+    <ClCompile Include="Camera.cpp">
+      <Filter>소스 파일\Component</Filter>
+    </ClCompile>
+    <ClCompile Include="..\include\imgui.cpp">
+      <Filter>소스 파일\Input\ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\include\imgui_demo.cpp">
+      <Filter>소스 파일\Input\ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\include\imgui_draw.cpp">
+      <Filter>소스 파일\Input\ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\include\imgui_tables.cpp">
+      <Filter>소스 파일\Input\ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\include\imgui_widgets.cpp">
+      <Filter>소스 파일\Input\ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\include\backends\imgui_impl_glfw.cpp">
+      <Filter>소스 파일\Input\ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\include\backends\imgui_impl_vulkan.cpp">
+      <Filter>소스 파일\Input\ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\include\imgui_stdlib.cpp">
+      <Filter>소스 파일\Input\ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="App.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="Common.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="Model.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="pch.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="Context.h">
+      <Filter>소스 파일\Vulkan</Filter>
+    </ClInclude>
+    <ClInclude Include="RenderManager.h">
+      <Filter>소스 파일\Manager</Filter>
+    </ClInclude>
+    <ClInclude Include="Pipeline.h">
+      <Filter>소스 파일\Vulkan</Filter>
+    </ClInclude>
+    <ClInclude Include="InputManager.h">
+      <Filter>소스 파일\Manager</Filter>
+    </ClInclude>
+    <ClInclude Include="Camera.h">
+      <Filter>소스 파일\Component</Filter>
+    </ClInclude>
+    <ClInclude Include="App.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="Common.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="Model.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Shaders\shader.frag">
+      <Filter>소스 파일\Shaders</Filter>
+    </None>
+    <None Include="Shaders\shader.vert">
+      <Filter>소스 파일\Shaders</Filter>
+    </None>
+    <None Include="ClassDiagram.cd" />
+    <None Include="Shaders\DepthOnly.frag">
+      <Filter>소스 파일\Shaders</Filter>
+    </None>
+    <None Include="Shaders\DepthOnly.vert">
+      <Filter>소스 파일\Shaders</Filter>
+    </None>
+  </ItemGroup>
+</Project>
