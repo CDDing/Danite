@@ -108,31 +108,35 @@ void DDing::Context::createLogicalDevice()
 		vk::DeviceQueueCreateInfo queueCreateInfo{ {},queueFamiliy,1, &queuePriority };
 		queueCreateInfos.push_back(queueCreateInfo);
 	}
-	//For RT
-	vk::PhysicalDeviceDescriptorIndexingFeaturesEXT pddifEXT;
-	pddifEXT.runtimeDescriptorArray = VK_TRUE;
-	pddifEXT.descriptorBindingPartiallyBound = vk::True;
-	pddifEXT.descriptorBindingVariableDescriptorCount = vk::True;
-	pddifEXT.shaderSampledImageArrayNonUniformIndexing = vk::True;
-	pddifEXT.descriptorBindingSampledImageUpdateAfterBind = vk::True;
-	pddifEXT.shaderUniformBufferArrayNonUniformIndexing = vk::True;
-	pddifEXT.descriptorBindingUniformBufferUpdateAfterBind = vk::True;
-	pddifEXT.shaderStorageBufferArrayNonUniformIndexing = vk::True;
-	pddifEXT.descriptorBindingStorageBufferUpdateAfterBind = vk::True;
+
+	vk::PhysicalDeviceMeshShaderFeaturesEXT meshShaderFeatures{};
+	meshShaderFeatures.meshShader = vk::True;
+
+
+	vk::PhysicalDeviceVulkan12Features physicaldevice12features;
+	physicaldevice12features.storageBuffer8BitAccess = vk::True;
+	physicaldevice12features.runtimeDescriptorArray = VK_TRUE;
+	physicaldevice12features.descriptorBindingPartiallyBound = vk::True;
+	physicaldevice12features.descriptorBindingVariableDescriptorCount = vk::True;
+	physicaldevice12features.shaderSampledImageArrayNonUniformIndexing = vk::True;
+	physicaldevice12features.descriptorBindingSampledImageUpdateAfterBind = vk::True;
+	physicaldevice12features.shaderUniformBufferArrayNonUniformIndexing = vk::True;
+	physicaldevice12features.descriptorBindingUniformBufferUpdateAfterBind = vk::True;
+	physicaldevice12features.shaderStorageBufferArrayNonUniformIndexing = vk::True;
+	physicaldevice12features.descriptorBindingStorageBufferUpdateAfterBind = vk::True;
+	physicaldevice12features.bufferDeviceAddress = vk::True;
+	physicaldevice12features.descriptorIndexing = vk::True;
+	physicaldevice12features.pNext = &meshShaderFeatures;
 
 	vk::PhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingPipelineFeatures{};
 	rayTracingPipelineFeatures.rayTracingPipeline = VK_TRUE;  // 기능 활성화
-	rayTracingPipelineFeatures.pNext = &pddifEXT;
+	rayTracingPipelineFeatures.pNext = &physicaldevice12features;
 
 	VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures = {};
 	accelerationStructureFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
 	accelerationStructureFeatures.accelerationStructure = VK_TRUE;
-	VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddressFeatures = {};
-	bufferDeviceAddressFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
-	bufferDeviceAddressFeatures.bufferDeviceAddress = VK_TRUE;
-	bufferDeviceAddressFeatures.pNext = &rayTracingPipelineFeatures;
-
-	accelerationStructureFeatures.pNext = &bufferDeviceAddressFeatures;
+	
+	accelerationStructureFeatures.pNext = &rayTracingPipelineFeatures;
 
 	VkPhysicalDeviceFeatures2 deviceFeatures{};
 	deviceFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;

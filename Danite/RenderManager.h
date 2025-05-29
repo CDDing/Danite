@@ -43,7 +43,6 @@ public:
 	vk::raii::Sampler DefaultSampler = nullptr;
 
 	DDing::Camera camera;
-	Model model;
 	std::vector<FrameData> frameDatas = {};
 private:
 	void InitGUISampler();
@@ -52,6 +51,7 @@ private:
 	void createPipeline();
 	void createDescriptor();
 	void createDepthImage();
+	void InitDescriptorsForMeshlets();
 	void createFramebuffers();
 
 	void updateUniform(vk::CommandBuffer commandBuffer);
@@ -66,6 +66,10 @@ private:
 	vk::raii::Pipeline pipeline = nullptr;
 	vk::raii::PipelineLayout pipelineLayout = nullptr;
 	vk::raii::DescriptorSetLayout descriptorSetLayout = nullptr;
+
+	vk::raii::DescriptorPool meshlet_descriptorPool = nullptr;
+	vk::raii::DescriptorSet meshlet_descriptorSet = nullptr;
+	vk::raii::DescriptorSetLayout meshlet_descriptorSetLayout = nullptr;
 
 	std::vector<vk::raii::Framebuffer> framebuffers;
 

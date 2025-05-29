@@ -121,7 +121,7 @@
     <None Include="Shaders\shader.frag">
       <Filter>소스 파일\Shaders</Filter>
     </None>
-    <None Include="Shaders\shader.vert">
+    <None Include="Shaders\shader.mesh">
       <Filter>소스 파일\Shaders</Filter>
     </None>
     <None Include="ClassDiagram.cd" />

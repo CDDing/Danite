@@ -6,13 +6,13 @@ void RenderManager::Init()
 {
     createRenderPass();
     createDescriptor();
+    InitDescriptorsForMeshlets();
     createPipeline();
     InitGUISampler();
     initFrameDatas();
     createDepthImage();
     createFramebuffers();
 
-    model.Init("../Resources/dragon.gltf");
 }
 void RenderManager::DrawFrame()
 {
@@ -65,12 +65,13 @@ void RenderManager::Draw(vk::CommandBuffer commandBuffer, uint32_t imageIndex)
     commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipeline);
 
     std::vector<vk::DescriptorSet> descriptorSetListForSkybox = {
-        *frameData.descriptorSet
+        *frameData.descriptorSet,
+        *meshlet_descriptorSet
     };
     commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
         pipelineLayout, 0, descriptorSetListForSkybox, {});
 
-    model.Draw(commandBuffer);
+    app->model.Draw(commandBuffer);
     commandBuffer.endRenderPass();
 }
 void RenderManager::DrawUI()
@@ -125,6 +126,7 @@ void RenderManager::initFrameDatas()
 
             std::vector<vk::DescriptorPoolSize> poolSizes = {
                 vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer,1),
+                vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer,4)
             };
 
             vk::DescriptorPoolCreateInfo poolInfo{};
@@ -242,14 +244,14 @@ void RenderManager::createRenderPass()
 
 void RenderManager::createPipeline()
 {
-    auto vertShaderCode = loadShader("Shaders/shader.vert.spv");
-    vk::ShaderModuleCreateInfo vertCreateInfo{};
-    vertCreateInfo.setCode(vertShaderCode);
-    vk::raii::ShaderModule vertShaderModule = app->context.logical.createShaderModule(vertCreateInfo);
-    vk::PipelineShaderStageCreateInfo vertStage{};
-    vertStage.setModule(*vertShaderModule);
-    vertStage.setPName("main");
-    vertStage.setStage(vk::ShaderStageFlagBits::eVertex);
+    auto meshShaderCode = loadShader("Shaders/shader.mesh.spv");
+    vk::ShaderModuleCreateInfo meshShaderCreateInfo{};
+    meshShaderCreateInfo.setCode(meshShaderCode);
+    vk::raii::ShaderModule meshShaderModule = app->context.logical.createShaderModule(meshShaderCreateInfo);
+    vk::PipelineShaderStageCreateInfo meshStage{};
+    meshStage.setModule(*meshShaderModule);
+    meshStage.setPName("main");
+    meshStage.setStage(vk::ShaderStageFlagBits::eMeshEXT);
 
     auto fragShaderCode = loadShader("Shaders/shader.frag.spv");
     vk::ShaderModuleCreateInfo fragCreateInfo{};
@@ -261,7 +263,7 @@ void RenderManager::createPipeline()
     fragStage.setStage(vk::ShaderStageFlagBits::eFragment);
 
 
-    std::vector<vk::PipelineShaderStageCreateInfo> shaderStages = { vertStage,fragStage };
+    std::vector<vk::PipelineShaderStageCreateInfo> shaderStages = { meshStage,fragStage };
 
 
     std::vector<vk::DynamicState> dynamicStates;
@@ -291,9 +293,11 @@ void RenderManager::createPipeline()
     attributeDescriptions[2].binding = 0;
     attributeDescriptions[2].location = 2;
     attributeDescriptions[2].format = vk::Format::eR32G32Sfloat;     // glm::vec2
-    attributeDescriptions[2].offset = offsetof(Vertex, texCoord);
-    vertexInputInfo.setVertexAttributeDescriptions(attributeDescriptions);
-    vertexInputInfo.setVertexBindingDescriptions(bindingDescription);
+    //attributeDescriptions[2].offset = offsetof(Vertex, texCoord);
+    //vertexInputInfo.setVertexAttributeDescriptions(attributeDescriptions);
+    //vertexInputInfo.setVertexBindingDescriptions(bindingDescription);
+    vertexInputInfo.setVertexAttributeDescriptions(nullptr);
+    vertexInputInfo.setVertexBindingDescriptions(nullptr);
 
     vk::PipelineInputAssemblyStateCreateInfo inputAssembly{};
     inputAssembly.setPrimitiveRestartEnable(vk::False);
@@ -362,7 +366,7 @@ void RenderManager::createPipeline()
     depthStencil.setFront(vk::StencilOpState{});
     depthStencil.setBack(vk::StencilOpState{});
 
-    std::vector<vk::DescriptorSetLayout> setLayouts = { *descriptorSetLayout};
+    std::vector<vk::DescriptorSetLayout> setLayouts = { *descriptorSetLayout, *meshlet_descriptorSetLayout};
     vk::PipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.setSetLayouts(setLayouts);
     //TODO
@@ -394,13 +398,18 @@ void RenderManager::createPipeline()
 
 void RenderManager::createDescriptor()
 {
+    std::vector<vk::DescriptorSetLayoutBinding> bindings;
+
     vk::DescriptorSetLayoutBinding layoutBinding{};
     layoutBinding.binding = 0;
     layoutBinding.descriptorType = vk::DescriptorType::eUniformBuffer;
     layoutBinding.descriptorCount = 1;
-    layoutBinding.stageFlags = vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment;
+    layoutBinding.stageFlags = vk::ShaderStageFlagBits::eMeshEXT| vk::ShaderStageFlagBits::eFragment;
+    bindings.push_back(layoutBinding);
+
+
     vk::DescriptorSetLayoutCreateInfo layoutInfo{};
-    layoutInfo.setBindings(layoutBinding);
+    layoutInfo.setBindings(bindings);
 
     descriptorSetLayout = app->context.logical.createDescriptorSetLayout(layoutInfo);
 
@@ -431,6 +440,155 @@ void RenderManager::createDepthImage()
     allocCreateInfo.priority = 1.0f;
 
     depthImage = DDing::Image(imageInfo, allocCreateInfo, imageViewInfo);
+}
+
+void RenderManager::InitDescriptorsForMeshlets()
+{
+    //Layout
+    {
+
+        std::vector<vk::DescriptorSetLayoutBinding> bindings;
+
+        vk::DescriptorSetLayoutBinding meshletBinding{};
+        meshletBinding.binding = 0;
+        meshletBinding.descriptorCount = app->model.MAX_LOD;
+        meshletBinding.descriptorType = vk::DescriptorType::eStorageBuffer;
+        meshletBinding.stageFlags = vk::ShaderStageFlagBits::eMeshEXT;
+        bindings.push_back(meshletBinding);
+
+        vk::DescriptorSetLayoutBinding meshletVerticesBinding{};
+        meshletVerticesBinding.binding = 1;
+        meshletVerticesBinding.descriptorCount = app->model.MAX_LOD;
+        meshletVerticesBinding.descriptorType = vk::DescriptorType::eStorageBuffer;
+        meshletVerticesBinding.stageFlags = vk::ShaderStageFlagBits::eMeshEXT;
+        bindings.push_back(meshletVerticesBinding);
+
+        vk::DescriptorSetLayoutBinding meshletTrianglesBinding{};
+        meshletTrianglesBinding.binding = 2;
+        meshletTrianglesBinding.descriptorCount = app->model.MAX_LOD;
+        meshletTrianglesBinding.descriptorType = vk::DescriptorType::eStorageBuffer;
+        meshletTrianglesBinding.stageFlags = vk::ShaderStageFlagBits::eMeshEXT;
+        bindings.push_back(meshletTrianglesBinding);
+
+        vk::DescriptorSetLayoutBinding verticesBinding{};
+        verticesBinding.binding = 3;
+        verticesBinding.descriptorCount = 1;
+        verticesBinding.descriptorType = vk::DescriptorType::eStorageBuffer;
+        verticesBinding.stageFlags = vk::ShaderStageFlagBits::eMeshEXT;
+        bindings.push_back(verticesBinding);
+
+        vk::DescriptorSetLayoutCreateInfo layoutInfo{};
+        layoutInfo.setBindings(bindings);
+
+        meshlet_descriptorSetLayout = app->context.logical.createDescriptorSetLayout(layoutInfo);
+
+    }
+    //Pool
+    {
+
+        std::vector<vk::DescriptorPoolSize> poolSizes = {
+            vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer,1),
+            vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer,16)
+        };
+
+        vk::DescriptorPoolCreateInfo poolInfo{};
+        poolInfo.setMaxSets(FRAME_CNT);
+        poolInfo.setPoolSizes(poolSizes);
+        poolInfo.setFlags(vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet | vk::DescriptorPoolCreateFlagBits::eUpdateAfterBind);
+
+        meshlet_descriptorPool = app->context.logical.createDescriptorPool(poolInfo);
+    }
+    //Set
+    {
+        vk::DescriptorSetAllocateInfo allocInfo{};
+        allocInfo.setDescriptorPool(*meshlet_descriptorPool);
+        allocInfo.setDescriptorSetCount(1);
+        allocInfo.setSetLayouts(*meshlet_descriptorSetLayout);
+
+        meshlet_descriptorSet = std::move(app->context.logical.allocateDescriptorSets(allocInfo).front());
+    }
+    //Update
+    {
+
+        std::vector<vk::WriteDescriptorSet> descriptorWrites;
+
+        std::vector<vk::DescriptorBufferInfo> meshlet_Infos;
+        {
+            for (int i = 0; i < app->model.MAX_LOD; i++) {
+                vk::DescriptorBufferInfo bufferInfo{};
+                bufferInfo.buffer = app->model.meshlet_Buffers[i].buffer;
+                bufferInfo.range = sizeof(meshopt_Meshlet) * app->model.meshlets[i].size();
+                bufferInfo.offset = 0;
+                meshlet_Infos.push_back(bufferInfo);
+            }
+
+            vk::WriteDescriptorSet writeDescriptor;
+            writeDescriptor.dstSet = *meshlet_descriptorSet;
+            writeDescriptor.dstBinding = 0;
+            writeDescriptor.dstArrayElement = 0;
+            writeDescriptor.descriptorCount = app->model.MAX_LOD;
+            writeDescriptor.descriptorType = vk::DescriptorType::eStorageBuffer;
+            writeDescriptor.pBufferInfo = meshlet_Infos.data();
+            descriptorWrites.push_back(writeDescriptor);
+        }
+
+        std::vector<vk::DescriptorBufferInfo> meshlet_vertices_Infos;
+        {
+            for (int i = 0; i < app->model.MAX_LOD; i++) {
+                vk::DescriptorBufferInfo bufferInfo{};
+                bufferInfo.buffer = app->model.meshlet_vertices_Buffers[i].buffer;
+                bufferInfo.range = sizeof(unsigned int) * app->model.meshlet_vertices[i].size();
+                bufferInfo.offset = 0;
+                meshlet_vertices_Infos.push_back(bufferInfo);
+            }
+
+            vk::WriteDescriptorSet writeDescriptor;
+            writeDescriptor.dstSet = *meshlet_descriptorSet;
+            writeDescriptor.dstBinding = 1;
+            writeDescriptor.dstArrayElement = 0;
+            writeDescriptor.descriptorCount = app->model.MAX_LOD;
+            writeDescriptor.descriptorType = vk::DescriptorType::eStorageBuffer;
+            writeDescriptor.pBufferInfo = meshlet_vertices_Infos.data();
+            descriptorWrites.push_back(writeDescriptor);
+        }
+        std::vector<vk::DescriptorBufferInfo> meshlet_triangles_Infos;
+        {
+            for (int i = 0; i < app->model.MAX_LOD; i++) {
+                vk::DescriptorBufferInfo bufferInfo{};
+                bufferInfo.buffer = app->model.meshlet_triangles_Buffers[i].buffer;
+                bufferInfo.range = sizeof(unsigned char) * app->model.meshlet_triangles[i].size();
+                bufferInfo.offset = 0;
+                meshlet_triangles_Infos.push_back(bufferInfo);
+            }
+
+            vk::WriteDescriptorSet writeDescriptor;
+            writeDescriptor.dstSet = *meshlet_descriptorSet;
+            writeDescriptor.dstBinding = 2;
+            writeDescriptor.dstArrayElement = 0;
+            writeDescriptor.descriptorCount = app->model.MAX_LOD;
+            writeDescriptor.descriptorType = vk::DescriptorType::eStorageBuffer;
+            writeDescriptor.pBufferInfo = meshlet_triangles_Infos.data();
+            descriptorWrites.push_back(writeDescriptor);
+        }
+
+        vk::DescriptorBufferInfo vertices_Info;
+        {
+            vertices_Info.buffer = app->model.vertexBuffer.buffer;
+            vertices_Info.offset = 0;
+            vertices_Info.range = sizeof(Vertex) * app->model.vertices.size();
+
+
+            vk::WriteDescriptorSet writeDescriptor;
+            writeDescriptor.dstSet = *meshlet_descriptorSet;
+            writeDescriptor.dstBinding = 3;
+            writeDescriptor.dstArrayElement = 0;
+            writeDescriptor.descriptorCount = 1;
+            writeDescriptor.descriptorType = vk::DescriptorType::eStorageBuffer;
+            writeDescriptor.pBufferInfo = &vertices_Info;
+            descriptorWrites.push_back(writeDescriptor);
+        }
+        app->context.logical.updateDescriptorSets(descriptorWrites,nullptr);
+    }
 }
 
 void RenderManager::createFramebuffers()

@@ -16,6 +16,7 @@ public:
 	void Render();
 
 	DDing::Context context;
+	Model model;
 	InputManager input;
 	RenderManager render;
 private:

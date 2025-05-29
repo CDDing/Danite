@@ -9,10 +9,12 @@ layout(set = 0, binding = 0) uniform GlobalBuffer {
     vec3 cameraPosition;
     float time;
 } ubo;
-
-layout(location = 0) in vec3 inWorldPos;
-layout(location = 1) in vec2 inUV;
-layout(location = 2) in vec3 inNormal;
+struct Vertex {
+    vec3 position;
+    vec3 normal;
+    vec2 uv;
+};
+layout(location = 0) in Vertex inVertex;
 
 layout(location = 0) out vec4 outColor;
 
@@ -73,5 +75,5 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0)
 
 // ----------------------------------------------------------------------------
 void main() {
-    outColor = vec4(inNormal, 1.0);
+    outColor = vec4(inVertex.normal, 1.0);
 }

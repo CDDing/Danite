@@ -1,0 +1,83 @@
+#version 460
+#extension GL_EXT_buffer_reference : require
+#extension GL_EXT_mesh_shader : require
+#extension GL_EXT_nonuniform_qualifier : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
+
+layout(set = 0, binding = 0) uniform GlobalBuffer {
+    mat4 view;
+    mat4 projection;
+    mat4 transform;
+    vec3 cameraPosition;
+    float time;
+} ubo;
+
+layout(local_size_x = 1) in;
+
+layout(triangles, max_vertices = 64, max_primitives = 124) out;
+
+struct Meshlet {
+    uint vertex_offset;
+    uint triangle_offset;
+    uint vertex_count;
+    uint triangle_count;
+};
+
+struct Vertex {
+    vec3 position;
+    float texCoordX;
+    vec3 normal;
+    float texCoordY;
+};
+
+#define MAX_LOD 10
+layout(set = 1, binding = 0) readonly buffer MeshletBuffer {
+    Meshlet meshlets[];
+} meshlet[];
+
+layout(set = 1, binding = 1) readonly buffer MeshletVertexBuffer {
+    uint meshlet_vertices[];
+} meshlet_vertice[];
+
+layout(set = 1, binding = 2) readonly buffer MeshletTriangleBuffer {
+    uint8_t meshlet_triangles[]; // Need to unpack manually
+} meshlet_triangle[];
+
+layout(set = 1, binding = 3) readonly buffer VertexBuffer {
+    Vertex vertices[];
+};
+
+
+layout(location = 0) out VertexOutput
+{
+	vec3 position;
+	vec3 normal;
+	vec2 uv;
+} vertexOut[];
+
+
+// Built-in
+void main() {
+    uint meshletIndex = gl_WorkGroupID.x;
+    uint currentLOD = 0;
+    Meshlet m = meshlet[currentLOD].meshlets[meshletIndex];
+
+    SetMeshOutputsEXT(m.vertex_count, m.triangle_count);
+
+    for (uint i = gl_LocalInvocationIndex; i < m.vertex_count; i += gl_WorkGroupSize.x) {
+        uint index = meshlet_vertice[currentLOD].meshlet_vertices[m.vertex_offset + i];
+        gl_MeshVerticesEXT[i].gl_Position = ubo.projection * ubo.view * ubo.transform *  vec4(vertices[index].position, 1);
+    
+        vertexOut[i].position = vertices[index].position;
+        vertexOut[i].normal = vertices[index].normal;
+        vertexOut[i].uv = vec2(vertices[index].texCoordX, vertices[index].texCoordY);
+    }
+
+    for (uint i = gl_LocalInvocationIndex; i < m.triangle_count; i += gl_WorkGroupSize.x) {
+        uint offset = m.triangle_offset + i * 3;
+        gl_PrimitiveTriangleIndicesEXT[i] = uvec3(
+            meshlet_triangle[currentLOD].meshlet_triangles[offset], 
+            meshlet_triangle[currentLOD].meshlet_triangles[offset + 1], 
+            meshlet_triangle[currentLOD].meshlet_triangles[offset + 2]);
+    }
+}

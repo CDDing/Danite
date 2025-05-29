@@ -14,6 +14,7 @@ App::~App()
 
 void App::Init()
 {
+    model.Init("../Resources/dragon.gltf");
     input.Init();
     render.Init();
 

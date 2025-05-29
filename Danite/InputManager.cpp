@@ -135,9 +135,9 @@ void InputManager::Update()
 	{
 		ImGui::Begin("Inspector");
 
-		int level = app->render.model.LOD;
-		if (ImGui::SliderInt("LOD Level", &level, 0, app->render.model.MAX_LOD-1)) {
-			app->render.model.LOD = level;
+		int level = app->model.LOD;
+		if (ImGui::SliderInt("LOD Level", &level, 0, app->model.MAX_LOD-1)) {
+			app->model.LOD = level;
 		}
 
 
