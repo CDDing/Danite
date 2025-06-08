@@ -9,6 +9,7 @@ layout(set = 0, binding = 0) uniform GlobalBuffer {
     mat4 projection;
     mat4 transform;
     vec3 cameraPosition;
+    uint totalClusters;
     float time;
 } ubo;
 
@@ -23,6 +24,14 @@ struct Meshlet {
     uint triangle_count;
 };
 
+struct Cluster{
+    Meshlet meshlet;
+    uint verticesOffset;
+    uint trianglesOffset;
+    uint childOffset;
+    uint childCount;
+};
+
 struct Vertex {
     vec3 position;
     float texCoordX;
@@ -30,22 +39,28 @@ struct Vertex {
     float texCoordY;
 };
 
-#define MAX_LOD 10
-layout(set = 1, binding = 0) readonly buffer MeshletBuffer {
-    Meshlet meshlets[];
-} meshlet[];
+layout(set = 1, binding = 0) readonly buffer ClusterBuffer {
+    Cluster clusters[];
+} ;
 
 layout(set = 1, binding = 1) readonly buffer MeshletVertexBuffer {
     uint meshlet_vertices[];
-} meshlet_vertice[];
+} ;
 
 layout(set = 1, binding = 2) readonly buffer MeshletTriangleBuffer {
     uint8_t meshlet_triangles[]; // Need to unpack manually
-} meshlet_triangle[];
+} ;
 
 layout(set = 1, binding = 3) readonly buffer VertexBuffer {
     Vertex vertices[];
 };
+
+layout(set = 1, binding = 4) readonly buffer LODOffsetBuffer{
+    uint LODOffsets[];
+}
+layout(set = 1, binding = 5) readonly buffer childIndicesBuffer{
+    uint childIndices[];
+}
 
 
 layout(location = 0) out VertexOutput
@@ -53,31 +68,38 @@ layout(location = 0) out VertexOutput
 	vec3 position;
 	vec3 normal;
 	vec2 uv;
+    vec3 color;
 } vertexOut[];
 
 
 // Built-in
 void main() {
-    uint meshletIndex = gl_WorkGroupID.x;
-    uint currentLOD = 0;
-    Meshlet m = meshlet[currentLOD].meshlets[meshletIndex];
+    uint clusterIndex = gl_WorkGroupID.x;
+    Cluster c = clusters[clusterIndex];
+    Meshlet m = c.meshlet;
 
     SetMeshOutputsEXT(m.vertex_count, m.triangle_count);
+        vec3 meshletColor = vec3(
+        float((clusterIndex * 37) % 255) / 255.0,
+        float((clusterIndex * 59) % 255) / 255.0,
+        float((clusterIndex * 97) % 255) / 255.0
+    );
 
     for (uint i = gl_LocalInvocationIndex; i < m.vertex_count; i += gl_WorkGroupSize.x) {
-        uint index = meshlet_vertice[currentLOD].meshlet_vertices[m.vertex_offset + i];
+        uint index = meshlet_vertices[m.vertex_offset + i];
         gl_MeshVerticesEXT[i].gl_Position = ubo.projection * ubo.view * ubo.transform *  vec4(vertices[index].position, 1);
     
         vertexOut[i].position = vertices[index].position;
         vertexOut[i].normal = vertices[index].normal;
         vertexOut[i].uv = vec2(vertices[index].texCoordX, vertices[index].texCoordY);
+        vertexOut[i].color = meshletColor;
     }
 
     for (uint i = gl_LocalInvocationIndex; i < m.triangle_count; i += gl_WorkGroupSize.x) {
         uint offset = m.triangle_offset + i * 3;
         gl_PrimitiveTriangleIndicesEXT[i] = uvec3(
-            meshlet_triangle[currentLOD].meshlet_triangles[offset], 
-            meshlet_triangle[currentLOD].meshlet_triangles[offset + 1], 
-            meshlet_triangle[currentLOD].meshlet_triangles[offset + 2]);
+            meshlet_triangles[offset], 
+            meshlet_triangles[offset + 1], 
+            meshlet_triangles[offset + 2]);
     }
 }

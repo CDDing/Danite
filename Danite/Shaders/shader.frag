@@ -13,6 +13,7 @@ struct Vertex {
     vec3 position;
     vec3 normal;
     vec2 uv;
+    vec3 color;
 };
 layout(location = 0) in Vertex inVertex;
 
@@ -75,5 +76,5 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0)
 
 // ----------------------------------------------------------------------------
 void main() {
-    outColor = vec4(inVertex.normal, 1.0);
+    outColor = vec4(inVertex.color, 1.0);
 }

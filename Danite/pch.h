@@ -35,6 +35,7 @@
 #include <array>
 #include <unordered_map>
 #include <chrono>
+#include <unordered_set>
 #include <memory>
 #include <string>
 #include <utility>
