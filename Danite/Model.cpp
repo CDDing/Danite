@@ -6,11 +6,12 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 
 #include "tiny_gltf.h"
-void Model::Draw(vk::CommandBuffer commandBuffer)
+void Model::Draw(vk::raii::CommandBuffer& commandBuffer)
 {
 
 	vk::Buffer vertexBuffers[] = { vertexBuffer.buffer };
 	vk::DeviceSize offsets[] = { 0 };
+
 
 
 	//commandBuffer.bindVertexBuffers(0, vertexBuffers, offsets);
@@ -19,8 +20,12 @@ void Model::Draw(vk::CommandBuffer commandBuffer)
 	//commandBuffer.drawIndexed(static_cast<uint32_t>(indices[LOD].size()), 1, 0, 0, 0);
 
 	static const int local_size_x = 1;
-	vkCmdDrawMeshTasksEXT(commandBuffer, meshlets.size() / local_size_x, 1, 1);
-	//commandBuffer.drawMeshTasksEXT(meshlets[LOD].size(), 1, 1);
+	
+	int drawCount = LOD == MAX_LOD ? clusters.size() - LODOffset[LOD] : LODOffset[LOD + 1] - LODOffset[LOD];
+
+
+	//vkCmdDrawMeshTasksEXT(*commandBuffer, meshlets.size() / local_size_x, 1, 1);
+	commandBuffer.drawMeshTasksEXT(drawCount / local_size_x, 1, 1);
 }
 void Model::loadFile(std::string path)
 {
@@ -147,6 +152,7 @@ void Model::initBuffer()
 	
 	//LOD Offset
 	LODOffset_Buffer = generateGPUBuffer(LODOffset, app->context);
+	childIndices_Buffer = generateGPUBuffer(childIndices, app->context);
 }
 
 void Model::createClusters()
@@ -311,8 +317,8 @@ void Model::createAndInsertClusterNode(std::vector<unsigned int>& childrenCluste
 		cluster.meshlet = childCluster.meshlet;
 		cluster.childCount = 1;
 		cluster.childOffset = childIndices.size();
-		cluster.verticesOffset = 0;
-		cluster.triangleOffset = 0;
+		cluster.verticesOffset = childCluster.verticesOffset;
+		cluster.triangleOffset = childCluster.triangleOffset;
 
 		clusters.push_back(cluster);
 

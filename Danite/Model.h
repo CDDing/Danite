@@ -39,7 +39,8 @@ public:
 	DDing::Buffer meshlet_vertices_Buffer;
 	DDing::Buffer meshlet_triangles_Buffer;
 	DDing::Buffer LODOffset_Buffer;
-	void Draw(vk::CommandBuffer commandBuffer);
+	DDing::Buffer childIndices_Buffer;
+	void Draw(vk::raii::CommandBuffer& commandBuffer);
 
 	uint32_t LOD = 0;
 

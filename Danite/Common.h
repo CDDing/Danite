@@ -33,6 +33,7 @@ struct alignas(16) GlobalBuffer {
     glm::mat4 projection;
     glm::mat4 transform;
     glm::vec3 cameraPosition;
+    uint32_t currentLOD;
     uint32_t totalClusters;
     float time;
 

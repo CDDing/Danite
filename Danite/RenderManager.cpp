@@ -71,7 +71,7 @@ void RenderManager::Draw(vk::CommandBuffer commandBuffer, uint32_t imageIndex)
 	commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
 		pipelineLayout, 0, descriptorSetListForSkybox, {});
 
-	app->model.Draw(commandBuffer);
+	app->model.Draw(frameData.commandBuffer);
 	commandBuffer.endRenderPass();
 }
 void RenderManager::DrawUI()
@@ -477,6 +477,22 @@ void RenderManager::InitDescriptorsForMeshlets()
 		verticesBinding.stageFlags = vk::ShaderStageFlagBits::eMeshEXT;
 		bindings.push_back(verticesBinding);
 
+
+		vk::DescriptorSetLayoutBinding LODOffsetsBinding{};
+		LODOffsetsBinding.binding = 4;
+		LODOffsetsBinding.descriptorCount = 1;
+		LODOffsetsBinding.descriptorType = vk::DescriptorType::eStorageBuffer;
+		LODOffsetsBinding.stageFlags = vk::ShaderStageFlagBits::eMeshEXT;
+		bindings.push_back(LODOffsetsBinding);
+
+
+		vk::DescriptorSetLayoutBinding childIndicesBinding{};
+		childIndicesBinding.binding = 5;
+		childIndicesBinding.descriptorCount = 1;
+		childIndicesBinding.descriptorType = vk::DescriptorType::eStorageBuffer;
+		childIndicesBinding.stageFlags = vk::ShaderStageFlagBits::eMeshEXT;
+		bindings.push_back(childIndicesBinding);
+
 		vk::DescriptorSetLayoutCreateInfo layoutInfo{};
 		layoutInfo.setBindings(bindings);
 
@@ -584,6 +600,42 @@ void RenderManager::InitDescriptorsForMeshlets()
 			writeDescriptor.pBufferInfo = &vertices_Info;
 			descriptorWrites.push_back(writeDescriptor);
 		}
+		vk::DescriptorBufferInfo LODOffset_Info;
+		{
+			LODOffset_Info.buffer = app->model.LODOffset_Buffer.buffer;
+			LODOffset_Info.offset = 0;
+			LODOffset_Info.range = sizeof(uint32_t) * app->model.LODOffset.size();
+
+
+			vk::WriteDescriptorSet writeDescriptor;
+			writeDescriptor.dstSet = *meshlet_descriptorSet;
+			writeDescriptor.dstBinding = 4;
+			writeDescriptor.dstArrayElement = 0;
+			writeDescriptor.descriptorCount = 1;
+			writeDescriptor.descriptorType = vk::DescriptorType::eStorageBuffer;
+			writeDescriptor.pBufferInfo = &LODOffset_Info;
+			descriptorWrites.push_back(writeDescriptor);
+
+		}
+		vk::DescriptorBufferInfo childIndices_Info;
+		{
+
+			childIndices_Info.buffer = app->model.childIndices_Buffer.buffer;
+			childIndices_Info.offset = 0;
+			childIndices_Info.range = sizeof(uint32_t) * app->model.childIndices.size();
+
+
+			vk::WriteDescriptorSet writeDescriptor;
+			writeDescriptor.dstSet = *meshlet_descriptorSet;
+			writeDescriptor.dstBinding = 5;
+			writeDescriptor.dstArrayElement = 0;
+			writeDescriptor.descriptorCount = 1;
+			writeDescriptor.descriptorType = vk::DescriptorType::eStorageBuffer;
+			writeDescriptor.pBufferInfo = &childIndices_Info;
+			descriptorWrites.push_back(writeDescriptor);
+
+		}
+
 		app->context.logical.updateDescriptorSets(descriptorWrites, nullptr);
 	}
 }
@@ -616,6 +668,7 @@ void RenderManager::updateUniform(vk::CommandBuffer commandBuffer)
 	uniformBuffer.projection = DDing::Camera::Projection;
 	uniformBuffer.transform = glm::rotate(glm::radians(90.0f), glm::vec3(1, 0, 0));
 	uniformBuffer.totalClusters = app->model.clusters.size();
+	uniformBuffer.currentLOD = app->model.LOD;
 	memcpy(frameData.stagingBuffer.GetMappedPtr(), &uniformBuffer, sizeof(GlobalBuffer));
 
 	vk::BufferCopy copyRegion{};

@@ -9,6 +9,7 @@ layout(set = 0, binding = 0) uniform GlobalBuffer {
     mat4 projection;
     mat4 transform;
     vec3 cameraPosition;
+    uint currentLOD;
     uint totalClusters;
     float time;
 } ubo;
@@ -57,10 +58,10 @@ layout(set = 1, binding = 3) readonly buffer VertexBuffer {
 
 layout(set = 1, binding = 4) readonly buffer LODOffsetBuffer{
     uint LODOffsets[];
-}
+};
 layout(set = 1, binding = 5) readonly buffer childIndicesBuffer{
     uint childIndices[];
-}
+};
 
 
 layout(location = 0) out VertexOutput
@@ -74,8 +75,11 @@ layout(location = 0) out VertexOutput
 
 // Built-in
 void main() {
+
+    uint LODOffset = LODOffsets[ubo.currentLOD];
     uint clusterIndex = gl_WorkGroupID.x;
-    Cluster c = clusters[clusterIndex];
+
+    Cluster c = clusters[LODOffset + clusterIndex];
     Meshlet m = c.meshlet;
 
     SetMeshOutputsEXT(m.vertex_count, m.triangle_count);
@@ -86,7 +90,7 @@ void main() {
     );
 
     for (uint i = gl_LocalInvocationIndex; i < m.vertex_count; i += gl_WorkGroupSize.x) {
-        uint index = meshlet_vertices[m.vertex_offset + i];
+        uint index = meshlet_vertices[c.verticesOffset + m.vertex_offset + i];
         gl_MeshVerticesEXT[i].gl_Position = ubo.projection * ubo.view * ubo.transform *  vec4(vertices[index].position, 1);
     
         vertexOut[i].position = vertices[index].position;
@@ -96,7 +100,7 @@ void main() {
     }
 
     for (uint i = gl_LocalInvocationIndex; i < m.triangle_count; i += gl_WorkGroupSize.x) {
-        uint offset = m.triangle_offset + i * 3;
+        uint offset = c.trianglesOffset + m.triangle_offset + i * 3;
         gl_PrimitiveTriangleIndicesEXT[i] = uvec3(
             meshlet_triangles[offset], 
             meshlet_triangles[offset + 1], 
