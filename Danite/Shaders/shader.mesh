@@ -25,8 +25,21 @@ struct Meshlet {
     uint triangle_count;
 };
 
+struct Bound{
+    float center[3];
+    float radius;
+
+    float cone_apex[3];
+    float cone_axis[3];
+    float cone_cutoff;
+
+    int8_t cone_axis_s8[3];
+    int8_t cone_cutoff_s8;
+};
+
 struct Cluster{
     Meshlet meshlet;
+    Bound bound;
     uint verticesOffset;
     uint trianglesOffset;
     uint childOffset;
@@ -49,7 +62,7 @@ layout(set = 1, binding = 1) readonly buffer MeshletVertexBuffer {
 } ;
 
 layout(set = 1, binding = 2) readonly buffer MeshletTriangleBuffer {
-    uint8_t meshlet_triangles[]; // Need to unpack manually
+    uint8_t meshlet_triangles[];
 } ;
 
 layout(set = 1, binding = 3) readonly buffer VertexBuffer {
@@ -73,16 +86,18 @@ layout(location = 0) out VertexOutput
 } vertexOut[];
 
 
-struct Payload {
-    vec2 instanceXY;
-};
 
+struct Payload{
+    uint clusterIndex;
+    uint instanceIndex;
+};
 taskPayloadSharedEXT Payload payload;
 // Built-in
 void main() {
 
     uint LODOffset = LODOffsets[ubo.currentLOD];
-    uint clusterIndex = gl_WorkGroupID.x;
+    uint clusterIndex = payload.clusterIndex;
+    uint instanceIndex = payload.instanceIndex;
 
     Cluster c = clusters[LODOffset + clusterIndex];
     Meshlet m = c.meshlet;
@@ -94,10 +109,12 @@ void main() {
         float((clusterIndex * 97) % 255) / 255.0
     );
 
+vec3 offset = 0.2 * vec3(float(instanceIndex % 10), 0.0, -float(instanceIndex) / 10.0);
+
+
     for (uint i = gl_LocalInvocationIndex; i < m.vertex_count; i += gl_WorkGroupSize.x) {
         uint index = meshlet_vertices[c.verticesOffset + m.vertex_offset + i];
         
-        vec3 offset = vec3(payload.instanceXY, 0.0) * 0.5;
         vec4 worldPos = ubo.transform * vec4(vertices[index].position, 1.0) + vec4(vec3(offset),0.0);
         gl_MeshVerticesEXT[i].gl_Position = ubo.projection * ubo.view * worldPos;
     

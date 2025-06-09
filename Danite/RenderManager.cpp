@@ -413,7 +413,7 @@ void RenderManager::createDescriptor()
 	layoutBinding.binding = 0;
 	layoutBinding.descriptorType = vk::DescriptorType::eUniformBuffer;
 	layoutBinding.descriptorCount = 1;
-	layoutBinding.stageFlags = vk::ShaderStageFlagBits::eMeshEXT | vk::ShaderStageFlagBits::eFragment;
+	layoutBinding.stageFlags = vk::ShaderStageFlagBits::eTaskEXT | vk::ShaderStageFlagBits::eMeshEXT | vk::ShaderStageFlagBits::eFragment;
 	bindings.push_back(layoutBinding);
 
 
@@ -462,28 +462,28 @@ void RenderManager::InitDescriptorsForMeshlets()
 		meshletBinding.binding = 0;
 		meshletBinding.descriptorCount = 1;
 		meshletBinding.descriptorType = vk::DescriptorType::eStorageBuffer;
-		meshletBinding.stageFlags = vk::ShaderStageFlagBits::eMeshEXT;
+		meshletBinding.stageFlags = vk::ShaderStageFlagBits::eTaskEXT | vk::ShaderStageFlagBits::eMeshEXT;
 		bindings.push_back(meshletBinding);
 
 		vk::DescriptorSetLayoutBinding meshletVerticesBinding{};
 		meshletVerticesBinding.binding = 1;
 		meshletVerticesBinding.descriptorCount = 1;
 		meshletVerticesBinding.descriptorType = vk::DescriptorType::eStorageBuffer;
-		meshletVerticesBinding.stageFlags = vk::ShaderStageFlagBits::eMeshEXT;
+		meshletVerticesBinding.stageFlags = vk::ShaderStageFlagBits::eTaskEXT | vk::ShaderStageFlagBits::eMeshEXT;
 		bindings.push_back(meshletVerticesBinding);
 
 		vk::DescriptorSetLayoutBinding meshletTrianglesBinding{};
 		meshletTrianglesBinding.binding = 2;
 		meshletTrianglesBinding.descriptorCount = 1;
 		meshletTrianglesBinding.descriptorType = vk::DescriptorType::eStorageBuffer;
-		meshletTrianglesBinding.stageFlags = vk::ShaderStageFlagBits::eMeshEXT;
+		meshletTrianglesBinding.stageFlags = vk::ShaderStageFlagBits::eTaskEXT | vk::ShaderStageFlagBits::eMeshEXT;
 		bindings.push_back(meshletTrianglesBinding);
 
 		vk::DescriptorSetLayoutBinding verticesBinding{};
 		verticesBinding.binding = 3;
 		verticesBinding.descriptorCount = 1;
 		verticesBinding.descriptorType = vk::DescriptorType::eStorageBuffer;
-		verticesBinding.stageFlags = vk::ShaderStageFlagBits::eMeshEXT;
+		verticesBinding.stageFlags = vk::ShaderStageFlagBits::eTaskEXT | vk::ShaderStageFlagBits::eMeshEXT;
 		bindings.push_back(verticesBinding);
 
 
@@ -491,7 +491,7 @@ void RenderManager::InitDescriptorsForMeshlets()
 		LODOffsetsBinding.binding = 4;
 		LODOffsetsBinding.descriptorCount = 1;
 		LODOffsetsBinding.descriptorType = vk::DescriptorType::eStorageBuffer;
-		LODOffsetsBinding.stageFlags = vk::ShaderStageFlagBits::eMeshEXT;
+		LODOffsetsBinding.stageFlags = vk::ShaderStageFlagBits::eTaskEXT | vk::ShaderStageFlagBits::eMeshEXT;
 		bindings.push_back(LODOffsetsBinding);
 
 
@@ -499,7 +499,7 @@ void RenderManager::InitDescriptorsForMeshlets()
 		childIndicesBinding.binding = 5;
 		childIndicesBinding.descriptorCount = 1;
 		childIndicesBinding.descriptorType = vk::DescriptorType::eStorageBuffer;
-		childIndicesBinding.stageFlags = vk::ShaderStageFlagBits::eMeshEXT;
+		childIndicesBinding.stageFlags = vk::ShaderStageFlagBits::eTaskEXT | vk::ShaderStageFlagBits::eMeshEXT;
 		bindings.push_back(childIndicesBinding);
 
 		vk::DescriptorSetLayoutCreateInfo layoutInfo{};

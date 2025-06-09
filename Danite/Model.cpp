@@ -20,11 +20,10 @@ void Model::Draw(vk::raii::CommandBuffer& commandBuffer)
 	//commandBuffer.drawIndexed(static_cast<uint32_t>(indices[LOD].size()), 1, 0, 0, 0);
 
 	static const int local_size_x = 1;
+	static const int meshletCount = 8879;
+	static const int instancingCount = 100;
 	
-	int drawCount = LOD == MAX_LOD ? clusters.size() - LODOffset[LOD] : LODOffset[LOD + 1] - LODOffset[LOD];
-	
-	//commandBuffer.drawMeshTasksEXT(drawCount / local_size_x, 1, 1);
-	commandBuffer.drawMeshTasksEXT(3, 3, 1);
+	commandBuffer.drawMeshTasksEXT(meshletCount * instancingCount / local_size_x,1,1);
 }
 void Model::loadFile(std::string path)
 {
@@ -307,6 +306,36 @@ void Model::GroupingMeshlets()
 
 }
 
+void Model::generateBoundings()
+{
+	for (auto& cluster : clusters) {
+
+		std::vector<unsigned int> indices;
+		auto meshlet = cluster.meshlet;
+
+
+		const uint32_t* vertex_offset = &meshlet_vertices[meshlet.vertex_offset + cluster.verticesOffset]; // from meshoptimizer
+
+		for (int tri = 0; tri < meshlet.triangle_count; tri++) {
+			const uint32_t triangle_offset = meshlet.triangle_offset + cluster.triangleOffset;
+			uint32_t i0 = meshlet_triangles[triangle_offset + tri * 3 + 0];
+			uint32_t i1 = meshlet_triangles[triangle_offset + tri * 3 + 1];
+			uint32_t i2 = meshlet_triangles[triangle_offset + tri * 3 + 2];
+
+			uint32_t v0 = vertex_offset[i0];
+			uint32_t v1 = vertex_offset[i1];
+			uint32_t v2 = vertex_offset[i2];
+
+			indices.push_back(v0);
+			indices.push_back(v1);
+			indices.push_back(v2);
+		}
+
+		cluster.bound = meshopt_computeClusterBounds(&indices[0], indices.size(), &vertices[0].position.x, vertices.size(), sizeof(Vertex));
+		
+	}
+}
+
 void Model::createAndInsertClusterNode(std::vector<unsigned int>& childrenClusterIndices)
 {
 	if (childrenClusterIndices.size() == 1) {
@@ -315,6 +344,7 @@ void Model::createAndInsertClusterNode(std::vector<unsigned int>& childrenCluste
 		Cluster cluster;
 		cluster.meshlet = childCluster.meshlet;
 		cluster.childCount = 1;
+		cluster.bound = childCluster.bound;
 		cluster.childOffset = childIndices.size();
 		cluster.verticesOffset = childCluster.verticesOffset;
 		cluster.triangleOffset = childCluster.triangleOffset;
@@ -415,6 +445,7 @@ void Model::Init(std::string path) {
 	loadFile(path);
 	createClusters();
 	GroupingMeshlets();
+	generateBoundings();
 	initBuffer();
 	
 }

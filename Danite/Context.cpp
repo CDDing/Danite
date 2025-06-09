@@ -127,6 +127,7 @@ void DDing::Context::createLogicalDevice()
 	physicaldevice12features.shaderStorageBufferArrayNonUniformIndexing = vk::True;
 	physicaldevice12features.descriptorBindingStorageBufferUpdateAfterBind = vk::True;
 	physicaldevice12features.bufferDeviceAddress = vk::True;
+	physicaldevice12features.shaderInt8 = vk::True;
 	physicaldevice12features.descriptorIndexing = vk::True;
 	physicaldevice12features.pNext = &meshShaderFeatures;
 

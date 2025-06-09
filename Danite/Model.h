@@ -11,6 +11,7 @@ struct Vertex {
 struct Cluster {
 
 	meshopt_Meshlet meshlet;
+	meshopt_Bounds bound;
 	unsigned int verticesOffset;
 	unsigned int triangleOffset;
 	unsigned int childOffset;
@@ -55,7 +56,7 @@ private:
 	void createClusters();
 	void buildBVH();
 	void GroupingMeshlets();
-
+	void generateBoundings();
 
 	//insert new cluster with Simplyfying and building new clusters from clusters
 	void createAndInsertClusterNode(std::vector<unsigned int>& childrenClusterIndices);

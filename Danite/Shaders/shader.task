@@ -1,17 +1,100 @@
 #version 460
 #extension GL_EXT_mesh_shader : enable
+#extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
 
 layout(local_size_x = 1) in;
 
+layout(set = 0, binding = 0) uniform GlobalBuffer {
+    mat4 view;
+    mat4 projection;
+    mat4 transform;
+    vec3 cameraPosition;
+    uint currentLOD;
+    uint totalClusters;
+    float time;
+} ubo;
+
+struct Meshlet {
+    uint vertex_offset;
+    uint triangle_offset;
+    uint vertex_count;
+    uint triangle_count;
+};
+
+struct Bound{
+    float center[3];
+    float radius;
+
+    float cone_apex[3];
+    float cone_axis[3];
+    float cone_cutoff;
+
+    int8_t cone_axis_s8[3];
+    int8_t cone_cutoff_s8;
+};
+
+struct Cluster{
+    Meshlet meshlet;
+    Bound bound;
+    uint verticesOffset;
+    uint trianglesOffset;
+    uint childOffset;
+    uint childCount;
+};
+
+struct Vertex {
+    vec3 position;
+    float texCoordX;
+    vec3 normal;
+    float texCoordY;
+};
+
+layout(set = 1, binding = 0) readonly buffer ClusterBuffer {
+    Cluster clusters[];
+} ;
+
+layout(set = 1, binding = 1) readonly buffer MeshletVertexBuffer {
+    uint meshlet_vertices[];
+} ;
+
+layout(set = 1, binding = 2) readonly buffer MeshletTriangleBuffer {
+    uint8_t meshlet_triangles[]; 
+} ;
+
+layout(set = 1, binding = 3) readonly buffer VertexBuffer {
+    Vertex vertices[];
+};
+
+layout(set = 1, binding = 4) readonly buffer LODOffsetBuffer{
+    uint LODOffsets[];
+};
+layout(set = 1, binding = 5) readonly buffer childIndicesBuffer{
+    uint childIndices[];
+};
+
+
+
 struct Payload{
-	vec2 instanceXY;
+    uint clusterIndex;
+    uint instanceIndex;
 };
 taskPayloadSharedEXT Payload payload;
+
+bool isVisible(){
+	return false;
+}
+
+#define meshletCount 8879
 void main(){
 	
-	vec2 gridDim = vec2(gl_WorkGroupID.x, gl_WorkGroupID.y);
 	
-	payload.instanceXY = gridDim;
+    uint globalIndex = gl_WorkGroupID.x;
+    
+    uint instanceIndex = globalIndex / meshletCount;
+    uint clusterIndex = globalIndex % meshletCount;
+	
+    payload.instanceIndex = instanceIndex;
+    payload.clusterIndex = clusterIndex;
 
-	EmitMeshTasksEXT(8879,1,1);
+	EmitMeshTasksEXT(1,1,1);
 }
