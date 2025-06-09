@@ -131,5 +131,8 @@
     <None Include="Shaders\DepthOnly.vert">
       <Filter>소스 파일\Shaders</Filter>
     </None>
+    <None Include="Shaders\shader.task">
+      <Filter>소스 파일\Shaders</Filter>
+    </None>
   </ItemGroup>
 </Project>

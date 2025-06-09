@@ -111,6 +111,8 @@ void DDing::Context::createLogicalDevice()
 
 	vk::PhysicalDeviceMeshShaderFeaturesEXT meshShaderFeatures{};
 	meshShaderFeatures.meshShader = vk::True;
+	meshShaderFeatures.taskShader = vk::True;
+	
 
 
 	vk::PhysicalDeviceVulkan12Features physicaldevice12features;

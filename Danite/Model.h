@@ -23,7 +23,6 @@ public:
 	void Init(std::string path);
 
 	std::vector<Vertex> vertices;
-	PFN_vkCmdDrawMeshTasksEXT vkCmdDrawMeshTasksEXT;
 
 	std::vector<uint32_t> indices;
 	std::vector<meshopt_Meshlet> meshlets;

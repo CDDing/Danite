@@ -194,6 +194,7 @@
     <None Include="Shaders\DepthOnly.vert" />
     <None Include="Shaders\shader.frag" />
     <None Include="Shaders\shader.mesh" />
+    <None Include="Shaders\shader.task" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

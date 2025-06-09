@@ -73,6 +73,11 @@ layout(location = 0) out VertexOutput
 } vertexOut[];
 
 
+struct Payload {
+    vec2 instanceXY;
+};
+
+taskPayloadSharedEXT Payload payload;
 // Built-in
 void main() {
 
@@ -91,7 +96,10 @@ void main() {
 
     for (uint i = gl_LocalInvocationIndex; i < m.vertex_count; i += gl_WorkGroupSize.x) {
         uint index = meshlet_vertices[c.verticesOffset + m.vertex_offset + i];
-        gl_MeshVerticesEXT[i].gl_Position = ubo.projection * ubo.view * ubo.transform *  vec4(vertices[index].position, 1);
+        
+        vec3 offset = vec3(payload.instanceXY, 0.0) * 0.5;
+        vec4 worldPos = ubo.transform * vec4(vertices[index].position, 1.0) + vec4(vec3(offset),0.0);
+        gl_MeshVerticesEXT[i].gl_Position = ubo.projection * ubo.view * worldPos;
     
         vertexOut[i].position = vertices[index].position;
         vertexOut[i].normal = vertices[index].normal;

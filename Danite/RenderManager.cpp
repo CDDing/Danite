@@ -244,6 +244,15 @@ void RenderManager::createRenderPass()
 
 void RenderManager::createPipeline()
 {
+	auto taskShaderCode = loadShader("Shaders/shader.task.spv");
+	vk::ShaderModuleCreateInfo taskShaderCreateInfo{};
+	taskShaderCreateInfo.setCode(taskShaderCode);
+	vk::raii::ShaderModule taskShaderModule = app->context.logical.createShaderModule(taskShaderCreateInfo);
+	vk::PipelineShaderStageCreateInfo taskStage{};
+	taskStage.setModule(*taskShaderModule);
+	taskStage.setPName("main");
+	taskStage.setStage(vk::ShaderStageFlagBits::eTaskEXT);
+
 	auto meshShaderCode = loadShader("Shaders/shader.mesh.spv");
 	vk::ShaderModuleCreateInfo meshShaderCreateInfo{};
 	meshShaderCreateInfo.setCode(meshShaderCode);
@@ -263,7 +272,7 @@ void RenderManager::createPipeline()
 	fragStage.setStage(vk::ShaderStageFlagBits::eFragment);
 
 
-	std::vector<vk::PipelineShaderStageCreateInfo> shaderStages = { meshStage,fragStage };
+	std::vector<vk::PipelineShaderStageCreateInfo> shaderStages = { taskStage,meshStage,fragStage };
 
 
 	std::vector<vk::DynamicState> dynamicStates;

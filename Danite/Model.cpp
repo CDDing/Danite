@@ -22,10 +22,9 @@ void Model::Draw(vk::raii::CommandBuffer& commandBuffer)
 	static const int local_size_x = 1;
 	
 	int drawCount = LOD == MAX_LOD ? clusters.size() - LODOffset[LOD] : LODOffset[LOD + 1] - LODOffset[LOD];
-
-
-	//vkCmdDrawMeshTasksEXT(*commandBuffer, meshlets.size() / local_size_x, 1, 1);
-	commandBuffer.drawMeshTasksEXT(drawCount / local_size_x, 1, 1);
+	
+	//commandBuffer.drawMeshTasksEXT(drawCount / local_size_x, 1, 1);
+	commandBuffer.drawMeshTasksEXT(3, 3, 1);
 }
 void Model::loadFile(std::string path)
 {
@@ -412,7 +411,6 @@ void Model::createAndInsertClusterNode(std::vector<unsigned int>& childrenCluste
 }
 
 void Model::Init(std::string path) {
-	vkCmdDrawMeshTasksEXT = reinterpret_cast<PFN_vkCmdDrawMeshTasksEXT>(vkGetDeviceProcAddr(*app->context.logical, "vkCmdDrawMeshTasksEXT"));
 
 	loadFile(path);
 	createClusters();

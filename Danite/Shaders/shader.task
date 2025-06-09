@@ -1,0 +1,17 @@
+#version 460
+#extension GL_EXT_mesh_shader : enable
+
+layout(local_size_x = 1) in;
+
+struct Payload{
+	vec2 instanceXY;
+};
+taskPayloadSharedEXT Payload payload;
+void main(){
+	
+	vec2 gridDim = vec2(gl_WorkGroupID.x, gl_WorkGroupID.y);
+	
+	payload.instanceXY = gridDim;
+
+	EmitMeshTasksEXT(8879,1,1);
+}
