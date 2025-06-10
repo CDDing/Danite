@@ -3,11 +3,23 @@
 #extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
 
 layout(local_size_x = 1) in;
-
+struct Plane {
+    vec3 normal;
+    float dis;
+};
+struct Frustum {
+    Plane topFace;
+    Plane bottomFace;
+    Plane rightFace;
+    Plane leftFace;
+    Plane farFace;
+    Plane nearFace;
+};
 layout(set = 0, binding = 0) uniform GlobalBuffer {
     mat4 view;
     mat4 projection;
     mat4 transform;
+    Frustum viewFrustum;
     vec3 cameraPosition;
     uint currentLOD;
     uint totalClusters;
@@ -22,7 +34,7 @@ struct Meshlet {
 };
 
 struct Bound{
-    float center[3];
+    vec3 center;
     float radius;
 
     float cone_apex[3];
@@ -72,6 +84,7 @@ layout(set = 1, binding = 5) readonly buffer childIndicesBuffer{
     uint childIndices[];
 };
 
+#define meshletCount 8879
 
 
 struct Payload{
@@ -80,11 +93,42 @@ struct Payload{
 };
 taskPayloadSharedEXT Payload payload;
 
-bool isVisible(){
-	return false;
+bool isOnOrForwardPlane(vec3 center, float radius, Plane plane){
+    return dot(plane.normal, center) - plane.dis > -radius;
 }
 
-#define meshletCount 8879
+bool frustumCulled(Bound bound){
+
+    uint globalIndex = gl_WorkGroupID.x;
+    
+    uint instanceIndex = globalIndex / meshletCount;
+
+    vec3 offset = 0.2 * vec3(float(instanceIndex % 10), 0.0, -float(instanceIndex) / 10.0);
+
+
+    vec3 worldCenter = (ubo.transform * vec4(bound.center,1.f)).xyz + offset;
+
+    vec3 globalScale = vec3(length(ubo.transform[0].xyz),
+    length(ubo.transform[1].xyz),
+    length(ubo.transform[2].xyz));
+   
+    float maxScale = max(max(globalScale.x, globalScale.y), globalScale.z);
+    float scaledRadius = maxScale * bound.radius;
+    
+
+    return isOnOrForwardPlane(worldCenter, scaledRadius, ubo.viewFrustum.leftFace) &&
+    isOnOrForwardPlane(worldCenter, scaledRadius, ubo.viewFrustum.rightFace) &&
+    isOnOrForwardPlane(worldCenter, scaledRadius, ubo.viewFrustum.farFace) &&
+    isOnOrForwardPlane(worldCenter, scaledRadius, ubo.viewFrustum.nearFace) &&
+    isOnOrForwardPlane(worldCenter, scaledRadius, ubo.viewFrustum.topFace) &&
+    isOnOrForwardPlane(worldCenter, scaledRadius, ubo.viewFrustum.bottomFace);
+    
+}
+
+bool isVisible(Bound bound){
+	return frustumCulled(bound);
+}
+
 void main(){
 	
 	
@@ -96,5 +140,7 @@ void main(){
     payload.instanceIndex = instanceIndex;
     payload.clusterIndex = clusterIndex;
 
-	EmitMeshTasksEXT(1,1,1);
+    Cluster c = clusters[clusterIndex];
+
+    if(isVisible(c.bound)){	EmitMeshTasksEXT(1,1,1);}
 }

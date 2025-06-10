@@ -28,10 +28,32 @@ struct alignas(16) sLight {
     float innerCone, outerCone;
 };
 
+struct Plane {
+    glm::vec3 normal{ 0.f,1.f,0.f };
+    float distance = 0.f;
+
+    Plane() {
+    }
+
+    Plane(const glm::vec3& p1, const glm::vec3& norm)
+        : normal(glm::normalize(norm)),
+        distance(glm::dot(normal, p1))
+    {
+    }
+};
+struct Frustum {
+    Plane topFace;
+    Plane bottomFace;
+    Plane rightFace;
+    Plane leftFace;
+    Plane farFace;
+    Plane nearFace;
+};
 struct alignas(16) GlobalBuffer {
     glm::mat4 view;
     glm::mat4 projection;
     glm::mat4 transform;
+    Frustum viewFrustum;
     glm::vec3 cameraPosition;
     uint32_t currentLOD;
     uint32_t totalClusters;

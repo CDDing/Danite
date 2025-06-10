@@ -678,6 +678,7 @@ void RenderManager::updateUniform(vk::CommandBuffer commandBuffer)
 	uniformBuffer.transform = glm::rotate(glm::radians(90.0f), glm::vec3(1, 0, 0));
 	uniformBuffer.totalClusters = app->model.clusters.size();
 	uniformBuffer.currentLOD = app->model.LOD;
+	uniformBuffer.viewFrustum = camera.viewFrustum;
 	memcpy(frameData.stagingBuffer.GetMappedPtr(), &uniformBuffer, sizeof(GlobalBuffer));
 
 	vk::BufferCopy copyRegion{};

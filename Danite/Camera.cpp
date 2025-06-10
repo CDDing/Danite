@@ -31,6 +31,11 @@ void DDing::Camera::RecalculateMatrix()
 
 void DDing::Camera::UpdateMatrix()
 {
+	const float zNear = 0.0001f;
+	const float zFar = 10000.0f;
+	
+	const float fov = 70.0f;
+	const float aspect = 1600.f / 900.f;
 	auto eyePosition = worldPosition;
 	auto focusDirection = eyePosition + GetLook();
 	auto upDirection = GetUp();
@@ -38,9 +43,26 @@ void DDing::Camera::UpdateMatrix()
 	View = glm::lookAtLH(eyePosition, focusDirection, upDirection);
 
 	//if needed, Orthogonal add
-	Projection = glm::perspectiveFovLH(glm::radians(70.0f), static_cast<float>(app->context.swapchainExtent.width), static_cast<float>(app->context.swapchainExtent.height), 0.0001f, 10000.0f);
+	Projection = glm::perspectiveFovLH(glm::radians(fov), static_cast<float>(app->context.swapchainExtent.width), static_cast<float>(app->context.swapchainExtent.height), zNear, zFar);
 
 	Projection[1][1] *= -1;
+
+	const float halfVSide = zFar * tanf(glm::radians(fov) * 0.5f);
+	const float halfHSide = halfVSide * aspect;
+	const glm::vec3 frontMultFar = zFar * GetLook();
+
+	viewFrustum.nearFace = { eyePosition + zNear * GetLook(),
+		GetLook() };
+	viewFrustum.farFace = { eyePosition + frontMultFar,
+		-GetLook() };
+	viewFrustum.rightFace = { eyePosition, 
+		-glm::cross(frontMultFar - GetRight() * halfHSide, GetUp()) };
+	viewFrustum.leftFace = { eyePosition,
+		-glm::cross(GetUp(), frontMultFar + GetRight() * halfHSide)};
+	viewFrustum.topFace = { eyePosition,
+		-glm::cross(GetRight(), frontMultFar - GetUp() * halfVSide)};
+	viewFrustum.bottomFace = { eyePosition,
+		-glm::cross(frontMultFar + GetUp()*halfVSide, GetRight())};
 }
 
 

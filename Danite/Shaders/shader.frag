@@ -2,13 +2,29 @@
 #extension GL_EXT_nonuniform_qualifier : enable
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 #extension GL_EXT_shader_explicit_arithmetic_types_int32 : require
+struct Plane {
+    vec3 normal;
+    float dis;
+};
+struct Frustum {
+    Plane topFace;
+    Plane bottomFace;
+    Plane rightFace;
+    Plane leftFace;
+    Plane farFace;
+    Plane nearFace;
+};
 layout(set = 0, binding = 0) uniform GlobalBuffer {
     mat4 view;
     mat4 projection;
     mat4 transform;
+    Frustum viewFrustum;
     vec3 cameraPosition;
+    uint currentLOD;
+    uint totalClusters;
     float time;
 } ubo;
+
 struct Vertex {
     vec3 position;
     vec3 normal;

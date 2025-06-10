@@ -1,4 +1,5 @@
 #pragma once
+struct Frustum;
 namespace DDing {
 	class Camera
 	{
@@ -21,6 +22,8 @@ namespace DDing {
 		void Update() ;
 
 		void DrawUI() ;
+
+		Frustum viewFrustum;
 	private:
 		glm::vec3 GetLocalScale() const { return localScale; }
 		void SetLocalScale(const glm::vec3& localScale) { this->localScale = localScale; }
