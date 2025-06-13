@@ -31,8 +31,8 @@ void DDing::Camera::RecalculateMatrix()
 
 void DDing::Camera::UpdateMatrix()
 {
-	const float zNear = 0.0001f;
-	const float zFar = 10000.0f;
+	const float zNear = 0.1f;
+	const float zFar = 10.0f;
 	
 	const float fov = 70.0f;
 	const float aspect = 1600.f / 900.f;

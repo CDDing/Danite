@@ -104,6 +104,8 @@ layout(location = 0) out VertexOutput
 struct Payload{
     uint clusterIndex;
     uint instanceIndex;
+    uint lodLevel;
+    float test;
 };
 taskPayloadSharedEXT Payload payload;
 // Built-in

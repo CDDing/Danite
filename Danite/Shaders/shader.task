@@ -25,6 +25,7 @@ layout(set = 0, binding = 0) uniform GlobalBuffer {
     uint totalClusters;
     float time;
 } ubo;
+layout(set = 0, binding = 1) uniform sampler2D depthImage;
 
 struct Meshlet {
     uint vertex_offset;
@@ -85,11 +86,14 @@ layout(set = 1, binding = 5) readonly buffer childIndicesBuffer{
 };
 
 #define meshletCount 8879
-
+#define Width 1600
+#define Height 900
 
 struct Payload{
     uint clusterIndex;
     uint instanceIndex;
+    uint lodLevel;
+    float test;
 };
 taskPayloadSharedEXT Payload payload;
 
@@ -124,11 +128,110 @@ bool frustumCulled(Bound bound){
     isOnOrForwardPlane(worldCenter, scaledRadius, ubo.viewFrustum.bottomFace);
     
 }
+bool occlusionCulled(Bound bound){
 
-bool isVisible(Bound bound){
-	return frustumCulled(bound);
+    uint globalIndex = gl_WorkGroupID.x;
+    
+    uint instanceIndex = globalIndex / meshletCount;
+
+    vec3 offset = 0.2 * vec3(float(instanceIndex % 10), 0.0, -float(instanceIndex) / 10.0);
+
+
+    vec3 worldCenter = (ubo.transform * vec4(bound.center,1.f)).xyz + offset;
+
+        vec3 globalScale = vec3(length(ubo.transform[0].xyz),
+    length(ubo.transform[1].xyz),
+    length(ubo.transform[2].xyz));
+    
+    float maxScale = max(max(globalScale.x, globalScale.y), globalScale.z);
+    float scaledRadius = maxScale * bound.radius;
+    //for mipmap Level
+    vec2 min_screen_coord = vec2(1.0, 1.0); 
+    vec2 max_screen_coord = vec2(-1.0, -1.0); 
+
+    float max_obj_depth_ndc = -1.0; 
+    float min_obj_depth_ndc = 1.0; 
+
+    vec3 offsets[8] = vec3[](
+        vec3(scaledRadius, scaledRadius, scaledRadius),
+        vec3(scaledRadius, scaledRadius, -scaledRadius),
+        vec3(scaledRadius, -scaledRadius, scaledRadius),
+        vec3(scaledRadius, -scaledRadius, -scaledRadius),
+        vec3(-scaledRadius, scaledRadius, scaledRadius),
+        vec3(-scaledRadius, scaledRadius, -scaledRadius),
+        vec3(-scaledRadius, -scaledRadius, scaledRadius),
+        vec3(-scaledRadius, -scaledRadius, -scaledRadius)
+    );
+
+    for(int i=0;i<8;i++){
+        vec4 worldPos = vec4(worldCenter + offsets[i],1.0);
+        vec4 clipPos = ubo.projection * ubo.view * worldPos;
+        if(clipPos.w <= 0.0) continue;
+
+        float inv_w = 1.0 / max(clipPos.w,0.001);
+
+        vec3 ndcPos = clipPos.xyz * inv_w;
+        ndcPos.xy = clamp(ndcPos.xy,-1,1);
+
+        min_screen_coord = min(min_screen_coord, ndcPos.xy);
+        max_screen_coord = max(max_screen_coord, ndcPos.xy);
+        
+        min_obj_depth_ndc = min(min_obj_depth_ndc, ndcPos.z);
+        max_obj_depth_ndc = max(max_obj_depth_ndc, ndcPos.z);
+    }
+
+    vec2 screenResolution = vec2(Width, Height);
+    
+    vec2 min_pixel_coord = (min_screen_coord * 0.5 + 0.5) * screenResolution;
+    vec2 max_pixel_coord = (max_screen_coord * 0.5 + 0.5) * screenResolution;
+
+    vec2 screenSizePixels = max_pixel_coord - min_pixel_coord;
+    float maxDimPixels = max(screenSizePixels.x, screenSizePixels.y);
+
+    float mipLevel = int(ceil(log2(maxDimPixels)));
+    mipLevel = max(0.0,mipLevel);
+    //mipLevel = min(mipLevel , float(13-1)); 
+    payload.lodLevel = int(mipLevel);
+    
+    vec2 coords[4] = {
+        min_screen_coord * 0.5 + 0.5,
+        max_screen_coord * 0.5 + 0.5,
+        vec2(min_screen_coord.x,max_screen_coord.y) * 0.5 + 0.5,
+        vec2(max_screen_coord.x,min_screen_coord.y) * 0.5 + 0.5
+    };
+    
+    //sampling
+    float hiZ_max_depth = 0.0f;
+    for(int i=0;i<5;i++){
+        hiZ_max_depth = max(hiZ_max_depth, textureLod(depthImage,coords[i],mipLevel).r);
+    }
+    payload.test = textureLod(depthImage,(min_screen_coord + max_screen_coord) * 0.5 * 0.5 + 0.5,mipLevel).r;
+
+    if(min_obj_depth_ndc > hiZ_max_depth + 0.015) { //bias
+        return true;
+    }
+
+
+    return false;
+}
+bool backFaceCulling(){
+    return false;
 }
 
+bool isVisible(Bound bound){
+    if(!frustumCulled(bound)){
+        return false;
+    }
+
+    if(occlusionCulled(bound)){
+        return false;
+    }
+
+	return true;
+}
+void draw(){
+    
+}
 void main(){
 	
 	

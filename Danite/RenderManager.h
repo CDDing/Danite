@@ -16,12 +16,14 @@ namespace DDing {
 struct FrameData {
 	//For Synchronization
 	vk::raii::Semaphore renderFinish = nullptr;
-	vk::raii::Semaphore imageAvaiable = nullptr;
+	vk::raii::Semaphore imageAvailable = nullptr;
+	vk::raii::Semaphore computeFinish = nullptr;
 	vk::raii::Fence waitFrame = nullptr;
 
 	//For Command
 	vk::raii::CommandPool commandPool = nullptr;
 	vk::raii::CommandBuffer commandBuffer = nullptr;
+	vk::raii::CommandBuffer computeCommandBuffer = nullptr;
 
 	vk::raii::DescriptorPool descriptorPool = nullptr;
 	vk::raii::DescriptorSet descriptorSet = nullptr;
@@ -45,6 +47,7 @@ public:
 	DDing::Camera camera;
 	std::vector<FrameData> frameDatas = {};
 private:
+	static int swapchainImageCnt;
 	void InitGUISampler();
 	void initFrameDatas();
 	void createRenderPass();
@@ -53,6 +56,7 @@ private:
 	void createDepthImage();
 	void InitDescriptorsForMeshlets();
 	void createFramebuffers();
+	void createComputePipeline();
 
 	void updateUniform(vk::CommandBuffer commandBuffer);
 
@@ -60,7 +64,8 @@ private:
 	void presentCommandBuffer(vk::CommandBuffer commandBuffer,uint32_t imageIndex);
 
 	
-	DDing::Image depthImage;
+	std::array<DDing::Image, FRAME_CNT> depthImages;
+	std::array<DDing::Image, FRAME_CNT> depthImagesForHiZ;
 
 	vk::raii::RenderPass renderPass = nullptr;
 	vk::raii::Pipeline pipeline = nullptr;
@@ -73,5 +78,13 @@ private:
 
 	std::vector<vk::raii::Framebuffer> framebuffers;
 
+	//Compute
+	vk::raii::Pipeline computePipeline = nullptr;
+	vk::raii::PipelineLayout computePipelineLayout = nullptr;
+
+	vk::raii::DescriptorPool computeDescriptorPool = nullptr;
+	vk::raii::DescriptorSetLayout computeDescriptorSetLayout = nullptr;
+	std::array<std::vector<vk::raii::DescriptorSet>,FRAME_CNT> computeDescriptorSets;
+	std::array<std::vector<vk::raii::ImageView>,FRAME_CNT> depthImageForHiZViews;
 };
 

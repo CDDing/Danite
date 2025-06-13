@@ -2,17 +2,19 @@
 #include "RenderManager.h"
 #include "Pipeline.h"
 #include "Context.h"
+int RenderManager::swapchainImageCnt = 3;
 void RenderManager::Init()
 {
+	swapchainImageCnt = app->context.swapchainImages.size();
 	createRenderPass();
 	createDescriptor();
 	InitDescriptorsForMeshlets();
 	createPipeline();
 	InitGUISampler();
-	initFrameDatas();
 	createDepthImage();
+	createComputePipeline();
+	initFrameDatas();
 	createFramebuffers();
-
 }
 void RenderManager::DrawFrame()
 {
@@ -21,25 +23,70 @@ void RenderManager::DrawFrame()
 
 	auto resultForFence = app->context.logical.waitForFences({ *frameData.waitFrame }, vk::True, UINT64_MAX);
 
-	auto acquireImage = app->context.swapchain.acquireNextImage(UINT64_MAX, *frameData.imageAvaiable, VK_NULL_HANDLE);
+	auto acquireImage = app->context.swapchain.acquireNextImage(UINT64_MAX, *frameData.imageAvailable, VK_NULL_HANDLE);
 	uint32_t imageIndex = acquireImage.second;
 	vk::Result result = acquireImage.first;
 	//TODO handle recreateSwapchain
 	app->context.logical.resetFences({ *frameData.waitFrame });
+	vk::CommandBufferBeginInfo beginInfo{};
 
 	frameData.commandBuffer.reset({});
-	vk::CommandBufferBeginInfo beginInfo{};
 	frameData.commandBuffer.begin(beginInfo);
 
-	updateUniform(frameData.commandBuffer);
-	Draw(frameData.commandBuffer, imageIndex);
+
+	{
+
+		updateUniform(frameData.commandBuffer);
+		Draw(frameData.commandBuffer, imageIndex);
 
 
 
-	app->input.DrawImGui(frameData.commandBuffer, imageIndex);
+		app->input.DrawImGui(frameData.commandBuffer, imageIndex);
 
+
+	}
+
+
+	//compute downSampling
+	{
+		vk::ImageBlit blit{};
+		blit.srcSubresource = { vk::ImageAspectFlagBits::eDepth,0,0,1 };
+		blit.srcOffsets[1] = vk::Offset3D(app->context.swapchainExtent.width, app->context.swapchainExtent.height, 1);
+		blit.dstSubresource = { vk::ImageAspectFlagBits::eDepth,0,0,1 };
+		blit.dstOffsets[1] = vk::Offset3D(app->context.swapchainExtent.width, app->context.swapchainExtent.height, 1);
+		depthImagesForHiZ[currentFrame].setImageLayout(*frameData.commandBuffer, vk::ImageLayout::eTransferDstOptimal);
+
+		frameData.commandBuffer.blitImage(
+			depthImages[currentFrame].image, vk::ImageLayout::eTransferSrcOptimal,
+			depthImagesForHiZ[currentFrame].image, vk::ImageLayout::eTransferDstOptimal,
+			blit,
+			vk::Filter::eNearest
+		);
+		depthImagesForHiZ[currentFrame].setImageLayout(*frameData.commandBuffer, vk::ImageLayout::eGeneral);
+
+		auto mipLevel = static_cast<uint32_t>(std::floor(std::log2(std::max(app->context.swapchainExtent.width, app->context.swapchainExtent.height)))) + 1;
+
+		for (int mip = 1; mip < mipLevel; ++mip) {
+			std::vector<vk::DescriptorSet> descriptorSets = {
+				*computeDescriptorSets[currentFrame][mip - 1],
+			};
+			frameData.commandBuffer.bindPipeline(vk::PipelineBindPoint::eCompute, *computePipeline);
+			frameData.commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute, *computePipelineLayout, 0, descriptorSets, {});
+
+
+
+			uint32_t w = std::max(uint32_t(1), app->context.swapchainExtent.width >> mip);
+			uint32_t h = std::max(uint32_t(1), app->context.swapchainExtent.height >> mip);
+			float threadCnt = 8.f;
+
+			frameData.commandBuffer.dispatch(std::ceil((double)w / threadCnt), std::ceil((double)h / threadCnt), 1);
+		}
+
+		
+	}
 	frameData.commandBuffer.end();
 	submitCommandBuffer(*frameData.commandBuffer);
+
 	presentCommandBuffer(*frameData.commandBuffer, imageIndex);
 
 
@@ -99,8 +146,9 @@ void RenderManager::initFrameDatas()
 		FrameData frameData{};
 		{
 			vk::SemaphoreCreateInfo semaphoreInfo{};
-			frameData.imageAvaiable = app->context.logical.createSemaphore(semaphoreInfo);
+			frameData.imageAvailable = app->context.logical.createSemaphore(semaphoreInfo);
 			frameData.renderFinish = app->context.logical.createSemaphore(semaphoreInfo);
+			frameData.computeFinish = app->context.logical.createSemaphore(semaphoreInfo);
 		}
 		{
 			vk::FenceCreateInfo fenceInfo{};
@@ -182,7 +230,32 @@ void RenderManager::initFrameDatas()
 			descriptorWrite.descriptorCount = 1;
 			descriptorWrite.pBufferInfo = &bufferInfo;
 
+			
+			vk::DescriptorImageInfo depthImageInfo{};
+			depthImageInfo.setImageLayout(vk::ImageLayout::eGeneral);
+			depthImageInfo.setImageView(depthImagesForHiZ[(i + FRAME_CNT - 1) % FRAME_CNT].imageView);
+			depthImageInfo.setSampler(*DefaultSampler);
+			
+			
+			vk::WriteDescriptorSet descriptorWrite2{};
+			descriptorWrite2.dstSet = *frameData.descriptorSet;
+			descriptorWrite2.dstBinding = 1;
+			descriptorWrite2.dstArrayElement = 0;
+			descriptorWrite2.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+			descriptorWrite2.descriptorCount = 1;
+			descriptorWrite2.pImageInfo = &depthImageInfo;
+
+
 			app->context.logical.updateDescriptorSets(descriptorWrite, nullptr);
+			app->context.logical.updateDescriptorSets(descriptorWrite2, nullptr);
+		}
+		{
+			vk::CommandBufferAllocateInfo allocInfo{};
+			allocInfo.setLevel(vk::CommandBufferLevel::ePrimary);
+			allocInfo.setCommandBufferCount(1);
+			allocInfo.setCommandPool(*frameData.commandPool);
+
+			frameData.computeCommandBuffer = std::move(app->context.logical.allocateCommandBuffers(allocInfo).front());
 		}
 		frameDatas.push_back(std::move(frameData));
 	}
@@ -204,11 +277,11 @@ void RenderManager::createRenderPass()
 	depthAttachment.format = vk::Format::eD32Sfloat;
 	depthAttachment.samples = vk::SampleCountFlagBits::e1;
 	depthAttachment.loadOp = vk::AttachmentLoadOp::eClear;
-	depthAttachment.storeOp = vk::AttachmentStoreOp::eDontCare;
+	depthAttachment.storeOp = vk::AttachmentStoreOp::eStore;
 	depthAttachment.stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
 	depthAttachment.stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
-	depthAttachment.initialLayout = vk::ImageLayout::eUndefined;
-	depthAttachment.finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
+	depthAttachment.initialLayout = vk::ImageLayout::eTransferSrcOptimal;
+	depthAttachment.finalLayout = vk::ImageLayout::eTransferSrcOptimal;
 
 	vk::AttachmentReference colorAttachmentRef{};
 	colorAttachmentRef.attachment = 0;
@@ -416,6 +489,15 @@ void RenderManager::createDescriptor()
 	layoutBinding.stageFlags = vk::ShaderStageFlagBits::eTaskEXT | vk::ShaderStageFlagBits::eMeshEXT | vk::ShaderStageFlagBits::eFragment;
 	bindings.push_back(layoutBinding);
 
+	auto mipLevel = static_cast<uint32_t>(std::floor(std::log2(std::max(app->context.swapchainExtent.width, app->context.swapchainExtent.height)))) + 1;
+
+	vk::DescriptorSetLayoutBinding depthBinding{};
+	depthBinding.binding = 1;
+	depthBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+	depthBinding.descriptorCount = 1;
+	depthBinding.stageFlags = vk::ShaderStageFlagBits::eTaskEXT;
+	bindings.push_back(depthBinding);
+
 
 	vk::DescriptorSetLayoutCreateInfo layoutInfo{};
 	layoutInfo.setBindings(bindings);
@@ -426,29 +508,75 @@ void RenderManager::createDescriptor()
 
 void RenderManager::createDepthImage()
 {
-	vk::ImageCreateInfo imageInfo{};
-	imageInfo.setArrayLayers(1);
-	imageInfo.setExtent({ app->context.swapchainExtent.width, app->context.swapchainExtent.height, 1 });
-	imageInfo.setFormat(vk::Format::eD32Sfloat);
-	imageInfo.setImageType(vk::ImageType::e2D);
-	imageInfo.setMipLevels(1);
-	imageInfo.setSamples(vk::SampleCountFlagBits::e1);
-	imageInfo.setTiling(vk::ImageTiling::eOptimal);
-	imageInfo.setUsage(vk::ImageUsageFlagBits::eDepthStencilAttachment);
-	imageInfo.setInitialLayout(vk::ImageLayout::eUndefined);
-	imageInfo.setSharingMode(vk::SharingMode::eExclusive);
+	auto mipLevel = static_cast<uint32_t>(std::floor(std::log2(std::max(app->context.swapchainExtent.width, app->context.swapchainExtent.height)))) + 1;
+	
+	for (int i = 0; i < FRAME_CNT; i++) {
+		vk::ImageCreateInfo imageInfo{};
+		imageInfo.setArrayLayers(1);
+		imageInfo.setExtent({ app->context.swapchainExtent.width, app->context.swapchainExtent.height, 1 });
+		imageInfo.setFormat(vk::Format::eD32Sfloat);
+		imageInfo.setImageType(vk::ImageType::e2D);
+		imageInfo.setMipLevels(1);
+		imageInfo.setSamples(vk::SampleCountFlagBits::e1);
+		imageInfo.setTiling(vk::ImageTiling::eOptimal);
+		imageInfo.setUsage(vk::ImageUsageFlagBits::eDepthStencilAttachment |
+			vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc);
+		imageInfo.setInitialLayout(vk::ImageLayout::eUndefined);
+		imageInfo.setSharingMode(vk::SharingMode::eExclusive);
 
-	vk::ImageViewCreateInfo imageViewInfo{};
-	imageViewInfo.setFormat(imageInfo.format);
-	imageViewInfo.setViewType(vk::ImageViewType::e2D);
-	imageViewInfo.setSubresourceRange({ vk::ImageAspectFlagBits::eDepth, 0, imageInfo.mipLevels, 0, 1 });
+		vk::ImageViewCreateInfo imageViewInfo{};
+		imageViewInfo.setFormat(imageInfo.format);
+		imageViewInfo.setViewType(vk::ImageViewType::e2D);
+		imageViewInfo.setSubresourceRange({ vk::ImageAspectFlagBits::eDepth, 0, imageInfo.mipLevels, 0, 1 });
 
-	VmaAllocationCreateInfo allocCreateInfo = {};
-	allocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO;
-	allocCreateInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
-	allocCreateInfo.priority = 1.0f;
+		VmaAllocationCreateInfo allocCreateInfo = {};
+		allocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO;
+		allocCreateInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+		allocCreateInfo.priority = 1.0f;
 
-	depthImage = DDing::Image(imageInfo, allocCreateInfo, imageViewInfo);
+		depthImages[i] = DDing::Image(imageInfo, allocCreateInfo, imageViewInfo);
+		app->context.immediate_submit([&](vk::CommandBuffer commandBuffer) {
+			depthImages[i].setImageLayout(commandBuffer, vk::ImageLayout::eTransferSrcOptimal);
+			});
+	}
+
+	for (int i = 0; i < FRAME_CNT; i++) {
+		vk::ImageCreateInfo imageInfo{};
+		imageInfo.setArrayLayers(1);
+		imageInfo.setExtent({ app->context.swapchainExtent.width, app->context.swapchainExtent.height, 1 });
+		imageInfo.setFormat(vk::Format::eD32Sfloat);
+		imageInfo.setImageType(vk::ImageType::e2D);
+		imageInfo.setMipLevels(mipLevel);
+		imageInfo.setSamples(vk::SampleCountFlagBits::e1);
+		imageInfo.setTiling(vk::ImageTiling::eOptimal);
+		imageInfo.setUsage(vk::ImageUsageFlagBits::eTransferDst |
+			vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage);
+		imageInfo.setInitialLayout(vk::ImageLayout::eUndefined);
+		imageInfo.setSharingMode(vk::SharingMode::eExclusive);
+
+		vk::ImageViewCreateInfo imageViewInfo{};
+		imageViewInfo.setFormat(imageInfo.format);
+		imageViewInfo.setViewType(vk::ImageViewType::e2D);
+		imageViewInfo.setSubresourceRange({ vk::ImageAspectFlagBits::eDepth, 0, imageInfo.mipLevels, 0, 1 });
+
+		VmaAllocationCreateInfo allocCreateInfo = {};
+		allocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO;
+		allocCreateInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+		allocCreateInfo.priority = 1.0f;
+
+		depthImagesForHiZ[i] = DDing::Image(imageInfo, allocCreateInfo, imageViewInfo);
+	
+		app->context.immediate_submit([&](vk::CommandBuffer commandBuffer) {
+			depthImagesForHiZ[i].setImageLayout(commandBuffer, vk::ImageLayout::eGeneral);
+			});
+		for (uint32_t mip = 0; mip < mipLevel; mip++) {
+			imageViewInfo.setSubresourceRange({ vk::ImageAspectFlagBits::eDepth, mip, 1, 0, 1 });
+			imageViewInfo.setImage(depthImagesForHiZ[i].image);
+
+			vk::raii::ImageView depthImageView = app->context.logical.createImageView(imageViewInfo);
+			depthImageForHiZViews[i].push_back(std::move(depthImageView));
+		}
+	}
 }
 
 void RenderManager::InitDescriptorsForMeshlets()
@@ -651,10 +779,10 @@ void RenderManager::InitDescriptorsForMeshlets()
 
 void RenderManager::createFramebuffers()
 {
-	for (int i = 0; i < app->context.swapchainImages.size(); i++) {
+	for (int i = 0; i < FRAME_CNT; i++) {
 		std::array<vk::ImageView, 2> attachments{
 			app->context.swapchainImageViews[i],
-			depthImage.imageView
+			depthImages[i].imageView
 		};
 		vk::FramebufferCreateInfo framebufferInfo{};
 		framebufferInfo.setRenderPass(renderPass);
@@ -665,6 +793,120 @@ void RenderManager::createFramebuffers()
 
 		framebuffers.emplace_back(app->context.logical, framebufferInfo);
 	}
+}
+
+void RenderManager::createComputePipeline()
+{
+	auto mipLevel = static_cast<uint32_t>(std::floor(std::log2(std::max(app->context.swapchainExtent.width, app->context.swapchainExtent.height)))) + 1;
+
+	//DescriptorPool
+	{
+		std::vector<vk::DescriptorPoolSize> poolSizes = {
+			vk::DescriptorPoolSize(vk::DescriptorType::eStorageImage,30),
+			vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler,30)
+		};
+
+		vk::DescriptorPoolCreateInfo poolInfo{};
+		poolInfo.setMaxSets(FRAME_CNT * 30);
+		poolInfo.setPoolSizes(poolSizes);
+		poolInfo.setFlags(vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet | vk::DescriptorPoolCreateFlagBits::eUpdateAfterBind);
+
+		computeDescriptorPool = app->context.logical.createDescriptorPool(poolInfo);
+	}
+
+	//DescriptorSetLayout
+	{
+		std::vector<vk::DescriptorSetLayoutBinding> bindings;
+		vk::DescriptorSetLayoutBinding binding{};
+		binding.setBinding(0);
+		binding.setDescriptorCount(1);
+		binding.setDescriptorType(vk::DescriptorType::eCombinedImageSampler);
+		binding.setStageFlags(vk::ShaderStageFlagBits::eCompute);
+		bindings.push_back(binding);
+
+		binding.setBinding(1);
+		binding.setDescriptorCount(1);
+		binding.setDescriptorType(vk::DescriptorType::eStorageImage);
+		binding.setStageFlags(vk::ShaderStageFlagBits::eCompute);
+		bindings.push_back(binding);
+
+		vk::DescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo{};
+		descriptorSetLayoutCreateInfo.setBindings(bindings);
+		computeDescriptorSetLayout = app->context.logical.createDescriptorSetLayout(descriptorSetLayoutCreateInfo);
+	}
+	//DescriptorSet
+	{
+		for (int i = 0; i < FRAME_CNT; i++) {
+			for (int j = 1; j < mipLevel; j++) {
+				vk::DescriptorSetAllocateInfo allocateInfo{};
+				allocateInfo.setDescriptorPool(*computeDescriptorPool);
+				allocateInfo.setDescriptorSetCount(1);
+				allocateInfo.setSetLayouts(*computeDescriptorSetLayout);
+
+				computeDescriptorSets[i].push_back(std::move(app->context.logical.allocateDescriptorSets(allocateInfo).front()));
+
+			}
+		}
+	}
+
+	//UpdateDescriptorSet
+	{
+
+		for (int i = 0; i < FRAME_CNT; i++) {
+			for (int j = 1; j < mipLevel; j++) {
+				vk::DescriptorImageInfo imageInfo{};
+				imageInfo.setImageLayout(vk::ImageLayout::eGeneral);
+				imageInfo.setImageView(*depthImageForHiZViews[i][j-1]);
+				imageInfo.setSampler(*DefaultSampler);
+
+				vk::WriteDescriptorSet writeDescriptorSet{};
+				writeDescriptorSet.dstSet = *computeDescriptorSets[i][j-1];
+				writeDescriptorSet.dstBinding = 0;
+				writeDescriptorSet.dstArrayElement = 0;
+				writeDescriptorSet.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+				writeDescriptorSet.descriptorCount = 1;
+				writeDescriptorSet.pImageInfo = &imageInfo;
+
+				vk::DescriptorImageInfo imageInfo2{};
+				imageInfo2.setImageLayout(vk::ImageLayout::eGeneral);
+				imageInfo2.setImageView(*depthImageForHiZViews[i][j]);
+				imageInfo2.setSampler(VK_NULL_HANDLE);
+
+				vk::WriteDescriptorSet writeDescriptorSet2{};
+				writeDescriptorSet2.dstSet = *computeDescriptorSets[i][j-1];
+				writeDescriptorSet2.dstBinding = 1;
+				writeDescriptorSet2.dstArrayElement = 0;
+				writeDescriptorSet2.descriptorType = vk::DescriptorType::eStorageImage;
+				writeDescriptorSet2.descriptorCount = 1;
+				writeDescriptorSet2.pImageInfo = &imageInfo2;
+
+
+				app->context.logical.updateDescriptorSets(writeDescriptorSet, nullptr);
+				app->context.logical.updateDescriptorSets(writeDescriptorSet2, nullptr);
+			}
+		}
+		
+	}
+	auto compShaderCode = loadShader("Shaders/shader.comp.spv");
+	vk::ShaderModuleCreateInfo compShaderCreateInfo{};
+	compShaderCreateInfo.setCode(compShaderCode);
+	vk::raii::ShaderModule compShaderModule = app->context.logical.createShaderModule(compShaderCreateInfo);
+	vk::PipelineShaderStageCreateInfo compStage{};
+	compStage.setModule(*compShaderModule);
+	compStage.setPName("main");
+	compStage.setStage(vk::ShaderStageFlagBits::eCompute);
+
+	vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo{};
+	pipelineLayoutCreateInfo.setSetLayouts(*computeDescriptorSetLayout);
+	pipelineLayoutCreateInfo.setPushConstantRanges({});
+	computePipelineLayout = app->context.logical.createPipelineLayout(pipelineLayoutCreateInfo);
+
+	vk::ComputePipelineCreateInfo computeCreateInfo{};
+	computeCreateInfo.setStage(compStage);
+	computeCreateInfo.setBasePipelineHandle(VK_NULL_HANDLE);
+	computeCreateInfo.setBasePipelineIndex(-1);
+	computeCreateInfo.setLayout(*computePipelineLayout);
+	computePipeline = app->context.logical.createComputePipeline(nullptr, computeCreateInfo, nullptr);
 }
 
 void RenderManager::updateUniform(vk::CommandBuffer commandBuffer)
@@ -693,11 +935,15 @@ void RenderManager::submitCommandBuffer(vk::CommandBuffer commandBuffer)
 {
 	vk::SubmitInfo submitInfo{};
 	FrameData& frameData = frameDatas[currentFrame];
+	vk::PipelineStageFlags waitStages[1] = { vk::PipelineStageFlagBits::eColorAttachmentOutput};
+	std::vector<vk::Semaphore> waitSemaphores = {
+		*frameData.imageAvailable
+	};
 
-	vk::PipelineStageFlags waitStages[1] = { vk::PipelineStageFlagBits::eColorAttachmentOutput };
+	
 	submitInfo.setCommandBuffers(commandBuffer);
 	submitInfo.setSignalSemaphores(*frameData.renderFinish);
-	submitInfo.setWaitSemaphores(*frameData.imageAvaiable);
+	submitInfo.setWaitSemaphores(waitSemaphores);
 	submitInfo.setWaitDstStageMask(waitStages);
 
 	app->context.GetQueue(DDing::Context::QueueType::eGraphics).submit(submitInfo, *frameData.waitFrame);

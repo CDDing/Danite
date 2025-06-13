@@ -9,7 +9,7 @@ for %%f in (*.vert *.frag) do (
     echo Compiling %%f to %%f.spv...
     "%GLSLC_PATH%" %%f -o %%f.spv
 )
-for %%f in (*.rgen *.rchit *.rmiss *.task *.mesh) do (
+for %%f in (*.rgen *.rchit *.rmiss *.task *.mesh *.comp) do (
     echo Compiling %%f to %%f.spv with SPIR-V 1.5...
     "%GLSLC_PATH%" %%f -o %%f.spv --target-spv=spv1.5
 )

@@ -190,8 +190,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="ClassDiagram.cd" />
-    <None Include="Shaders\DepthOnly.frag" />
-    <None Include="Shaders\DepthOnly.vert" />
+    <None Include="Shaders\shader.comp" />
     <None Include="Shaders\shader.frag" />
     <None Include="Shaders\shader.mesh" />
     <None Include="Shaders\shader.task" />
