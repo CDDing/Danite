@@ -8,10 +8,14 @@ struct Vertex {
 	glm::vec3 normal;
 	float texCoordY;
 };
+struct Bound {
+	glm::vec3 center;
+	float radius;
+};
 struct Cluster {
 
 	meshopt_Meshlet meshlet;
-	meshopt_Bounds bound;
+	Bound bound;
 	unsigned int verticesOffset;
 	unsigned int triangleOffset;
 	unsigned int childOffset;
@@ -54,9 +58,9 @@ private:
 	void initBuffer();
 
 	void createClusters();
-	void buildBVH();
 	void GroupingMeshlets();
 	void generateBoundings();
+	void convertingChildIndices();
 
 	//insert new cluster with Simplyfying and building new clusters from clusters
 	void createAndInsertClusterNode(std::vector<unsigned int>& childrenClusterIndices);

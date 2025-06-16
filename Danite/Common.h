@@ -55,7 +55,7 @@ struct alignas(16) GlobalBuffer {
     glm::mat4 transform;
     Frustum viewFrustum;
     glm::vec3 cameraPosition;
-    uint32_t currentLOD;
+    uint32_t MaxLODCount;
     uint32_t totalClusters;
     float time;
 

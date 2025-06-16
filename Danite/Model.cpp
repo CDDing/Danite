@@ -20,7 +20,7 @@ void Model::Draw(vk::raii::CommandBuffer& commandBuffer)
 	//commandBuffer.drawIndexed(static_cast<uint32_t>(indices[LOD].size()), 1, 0, 0, 0);
 
 	static const int local_size_x = 1;
-	static const int meshletCount = 8879;
+	static const int meshletCount = clusters.size() - LODOffset[MAX_LOD - 1];
 	static const int instancingCount = 100;
 	
 	commandBuffer.drawMeshTasksEXT(meshletCount * instancingCount / local_size_x,1,1);
@@ -140,8 +140,6 @@ void Model::initBuffer()
 	//Index
 	indexBuffer = generateGPUBuffer(indices, app->context);
 
-	//Meshlet
-	cluster_Buffer = generateGPUBuffer(clusters, app->context);
 	//meshlet_Vertices
 	meshlet_vertices_Buffer = generateGPUBuffer(meshlet_vertices, app->context);
 	
@@ -151,6 +149,10 @@ void Model::initBuffer()
 	//LOD Offset
 	LODOffset_Buffer = generateGPUBuffer(LODOffset, app->context);
 	childIndices_Buffer = generateGPUBuffer(childIndices, app->context);
+
+
+	//Meshlet
+	cluster_Buffer = generateGPUBuffer(clusters,app->context);
 }
 
 void Model::createClusters()
@@ -197,7 +199,6 @@ void Model::createClusters()
 		clusters.push_back(cluster);
 	}
 
-	LODOffset.push_back(0);
 	LODOffset.push_back(clusters.size());
 
 }
@@ -205,13 +206,27 @@ void Model::createClusters()
 void Model::GroupingMeshlets()
 {
 
-	for (int currentLOD = 1; currentLOD < MAX_LOD; currentLOD++) {
+	for (int previousLOD = 0; previousLOD < MAX_LOD; previousLOD++) {
 
 
-		auto clusterCntInCurrentLOD = LODOffset[currentLOD] - LODOffset[currentLOD - 1];
+		unsigned int clusterCntInCurrentLOD = 0;
+		int start, end;
+
+		if (previousLOD == 0) {
+			clusterCntInCurrentLOD = LODOffset[previousLOD];
+			start = 0;
+			end = LODOffset[previousLOD];
+		}
+		else {
+			clusterCntInCurrentLOD = LODOffset[previousLOD] - LODOffset[previousLOD - 1];
+			start = LODOffset[previousLOD - 1];
+			end = LODOffset[previousLOD];
+		}
 
 		std::unordered_map<Edge, std::unordered_set<int>> edgeToClusters;
-		for (int clusterIndex = LODOffset[currentLOD - 1]; clusterIndex < LODOffset[currentLOD]; clusterIndex++) {
+
+	
+		for (int clusterIndex = start; clusterIndex < end; clusterIndex++) {
 			auto& cluster = clusters[clusterIndex];
 			auto& meshlet = cluster.meshlet;
 
@@ -265,12 +280,12 @@ void Model::GroupingMeshlets()
 		std::vector<idx_t> adjncy;
 
 		xadj[0] = 0;
-		for (int i = LODOffset[currentLOD-1]; i < LODOffset[currentLOD]; i++) {
+		for (int i = start; i < end; i++) {
 			for (int neighbor : clusterNeighbors[i]) {
-				adjncy.push_back(neighbor - LODOffset[currentLOD - 1]);
+				adjncy.push_back(neighbor - start);
 			}
 
-			xadj[i - LODOffset[currentLOD-1] + 1] = adjncy.size();
+			xadj[i - start + 1] = adjncy.size();
 		}
 
 		idx_t numMeshlets = clusterCntInCurrentLOD;
@@ -290,7 +305,7 @@ void Model::GroupingMeshlets()
 
 		std::unordered_map<int, std::vector<unsigned int>> clusterToParent;
 		for (int i = 0; i < partition.size(); i++) {
-			clusterToParent[partition[i]].push_back(i + LODOffset[currentLOD - 1]);
+			clusterToParent[partition[i]].push_back(i + start);
 		}
 
 		for (auto& [key, value] : clusterToParent) {
@@ -331,8 +346,75 @@ void Model::generateBoundings()
 			indices.push_back(v2);
 		}
 
-		cluster.bound = meshopt_computeClusterBounds(&indices[0], indices.size(), &vertices[0].position.x, vertices.size(), sizeof(Vertex));
+		auto bound = meshopt_computeClusterBounds(&indices[0], indices.size(), &vertices[0].position.x, vertices.size(), sizeof(Vertex));
+		Bound b;
+		b.center = glm::vec3(bound.center[0], bound.center[1], bound.center[2]);
+		b.radius = bound.radius;
+		cluster.bound = b;
+	}
+}
+
+//sorting indices per child
+void Model::convertingChildIndices()
+{
+	auto temp = childIndices;
+	childIndices.clear();
+
+	//traversing MAX_LOD
+	for (int index = LODOffset[MAX_LOD-1]; index < clusters.size(); index++) {
+		Cluster& c = clusters[index];
+
+		std::vector<uint32_t> lodCnt(MAX_LOD + 1,0); //store meshletCount per LOD
+
+		uint32_t childOffset = 0;
+		uint32_t childCount = 0;
+
 		
+		childOffset = childIndices.size();
+
+		std::queue<std::pair<uint32_t, int>> lodQ;
+		lodQ.push({ index,MAX_LOD });
+		while (!lodQ.empty()) {
+			auto idx = lodQ.front().first;
+			auto depth = lodQ.front().second;
+			lodQ.pop();
+			
+			Cluster& childCluster = clusters[idx];
+			lodCnt[depth]++;
+
+			for (int i = childCluster.childOffset; i < childCluster.childOffset + childCluster.childCount; i++) {
+				lodQ.push({ temp[i],depth - 1 });
+			}
+
+		}
+
+		for (int i = 0; i <= MAX_LOD; i++) {
+			childIndices.push_back(lodCnt[i]);
+		}
+
+		std::vector<uint32_t> localChildIndices;
+		std::queue<uint32_t> q;
+		q.push(index);
+		localChildIndices.push_back(index);
+		//Traversing with BFS
+		while (!q.empty()) {
+			auto& childCluster = clusters[q.front()];
+			for (int i = childCluster.childOffset; i < childCluster.childOffset + childCluster.childCount; i++) {
+				localChildIndices.push_back(temp[i]);
+				q.push(temp[i]);
+			}
+			childCount += childCluster.childCount;
+			
+			q.pop();
+		}
+
+
+		for (int i = localChildIndices.size() - 1; i >= 0; i--) {
+			childIndices.push_back(localChildIndices[i]);
+		}
+
+		c.childOffset = childOffset;
+		c.childCount = childCount;
 	}
 }
 
@@ -382,9 +464,9 @@ void Model::createAndInsertClusterNode(std::vector<unsigned int>& childrenCluste
 	}
 
 	//simplify Meshlets
-	size_t target_index_count = _childIndices.size() >> 1;
-	float target_error = 1e-2f;
-	int options = meshopt_SimplifyLockBorder |
+	size_t target_index_count = _childIndices.size() >> 2;
+	float target_error = 1e-1f;
+	int options = /*meshopt_SimplifyLockBorder |*/
 		meshopt_SimplifyErrorAbsolute |
 		meshopt_SimplifySparse;
 
@@ -416,6 +498,7 @@ void Model::createAndInsertClusterNode(std::vector<unsigned int>& childrenCluste
 	lod_meshlet_triangles.resize(last.triangle_offset + ((last.triangle_count * 3 + 3) & ~3));
 	lod_meshlets.resize(meshlet_count);
 
+
 	//generate Cluster and insert Result
 	for (int i = 0; i < meshlet_count; i++) {
 		Cluster cluster;
@@ -445,6 +528,7 @@ void Model::Init(std::string path) {
 	loadFile(path);
 	createClusters();
 	GroupingMeshlets();
+	convertingChildIndices();
 	generateBoundings();
 	initBuffer();
 	

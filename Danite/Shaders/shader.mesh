@@ -31,7 +31,6 @@ layout(set = 0, binding = 0) uniform GlobalBuffer {
 layout(local_size_x = 1) in;
 
 layout(triangles, max_vertices = 64, max_primitives = 124) out;
-
 struct Meshlet {
     uint vertex_offset;
     uint triangle_offset;
@@ -40,15 +39,8 @@ struct Meshlet {
 };
 
 struct Bound{
-    float center[3];
+    vec3 center;
     float radius;
-
-    float cone_apex[3];
-    float cone_axis[3];
-    float cone_cutoff;
-
-    int8_t cone_axis_s8[3];
-    int8_t cone_cutoff_s8;
 };
 
 struct Cluster{
@@ -59,6 +51,7 @@ struct Cluster{
     uint childOffset;
     uint childCount;
 };
+
 
 struct Vertex {
     vec3 position;
@@ -102,20 +95,20 @@ layout(location = 0) out VertexOutput
 
 
 struct Payload{
-    uint clusterIndex;
     uint instanceIndex;
+    uint drawOffset;
     uint lodLevel;
-    float test;
 };
 taskPayloadSharedEXT Payload payload;
 // Built-in
 void main() {
 
-    uint LODOffset = LODOffsets[ubo.currentLOD];
-    uint clusterIndex = payload.clusterIndex;
+    uint workGroupOffset = gl_WorkGroupID.x;
+
+    uint clusterIndex = childIndices[payload.drawOffset + workGroupOffset];
     uint instanceIndex = payload.instanceIndex;
 
-    Cluster c = clusters[LODOffset + clusterIndex];
+    Cluster c = clusters[clusterIndex];
     Meshlet m = c.meshlet;
 
     SetMeshOutputsEXT(m.vertex_count, m.triangle_count);
@@ -137,7 +130,7 @@ vec3 offset = 0.2 * vec3(float(instanceIndex % 10), 0.0, -float(instanceIndex) /
         vertexOut[i].position = vertices[index].position;
         vertexOut[i].normal = vertices[index].normal;
         vertexOut[i].uv = vec2(vertices[index].texCoordX, vertices[index].texCoordY);
-        vertexOut[i].color = meshletColor;
+        vertexOut[i].color = vec3((float(payload.lodLevel) / 4.0) * 0.5 + 0.5);
     }
 
     for (uint i = gl_LocalInvocationIndex; i < m.triangle_count; i += gl_WorkGroupSize.x) {

@@ -21,7 +21,7 @@ layout(set = 0, binding = 0) uniform GlobalBuffer {
     mat4 transform;
     Frustum viewFrustum;
     vec3 cameraPosition;
-    uint currentLOD;
+    uint MaxLODCount;
     uint totalClusters;
     float time;
 } ubo;
@@ -37,13 +37,6 @@ struct Meshlet {
 struct Bound{
     vec3 center;
     float radius;
-
-    float cone_apex[3];
-    float cone_axis[3];
-    float cone_cutoff;
-
-    int8_t cone_axis_s8[3];
-    int8_t cone_cutoff_s8;
 };
 
 struct Cluster{
@@ -62,7 +55,7 @@ struct Vertex {
     float texCoordY;
 };
 
-layout(set = 1, binding = 0) readonly buffer ClusterBuffer {
+layout(std430, set = 1, binding = 0) readonly buffer ClusterBuffer {
     Cluster clusters[];
 } ;
 
@@ -85,15 +78,14 @@ layout(set = 1, binding = 5) readonly buffer childIndicesBuffer{
     uint childIndices[];
 };
 
-#define meshletCount 8879
 #define Width 1600
 #define Height 900
+#define MAX_LOD 4
 
 struct Payload{
-    uint clusterIndex;
     uint instanceIndex;
+    uint drawOffset;
     uint lodLevel;
-    float test;
 };
 taskPayloadSharedEXT Payload payload;
 
@@ -105,7 +97,7 @@ bool frustumCulled(Bound bound){
 
     uint globalIndex = gl_WorkGroupID.x;
     
-    uint instanceIndex = globalIndex / meshletCount;
+    uint instanceIndex = globalIndex / ubo.MaxLODCount;
 
     vec3 offset = 0.2 * vec3(float(instanceIndex % 10), 0.0, -float(instanceIndex) / 10.0);
 
@@ -132,7 +124,7 @@ bool occlusionCulled(Bound bound){
 
     uint globalIndex = gl_WorkGroupID.x;
     
-    uint instanceIndex = globalIndex / meshletCount;
+    uint instanceIndex = globalIndex / ubo.MaxLODCount;
 
     vec3 offset = 0.2 * vec3(float(instanceIndex % 10), 0.0, -float(instanceIndex) / 10.0);
 
@@ -205,8 +197,7 @@ bool occlusionCulled(Bound bound){
     for(int i=0;i<5;i++){
         hiZ_max_depth = max(hiZ_max_depth, textureLod(depthImage,coords[i],mipLevel).r);
     }
-    payload.test = textureLod(depthImage,(min_screen_coord + max_screen_coord) * 0.5 * 0.5 + 0.5,mipLevel).r;
-
+    
     if(min_obj_depth_ndc > hiZ_max_depth + 0.015) { //bias
         return true;
     }
@@ -237,13 +228,41 @@ void main(){
 	
     uint globalIndex = gl_WorkGroupID.x;
     
-    uint instanceIndex = globalIndex / meshletCount;
-    uint clusterIndex = globalIndex % meshletCount;
+    uint instanceIndex = globalIndex / ubo.MaxLODCount;
+    uint clusterIndex = globalIndex % ubo.MaxLODCount + LODOffsets[MAX_LOD - 1];
 	
     payload.instanceIndex = instanceIndex;
-    payload.clusterIndex = clusterIndex;
 
+    //Root Node
     Cluster c = clusters[clusterIndex];
 
-    if(isVisible(c.bound)){	EmitMeshTasksEXT(1,1,1);}
+    bool check = isVisible(c.bound);
+    if(check){	
+        vec3 offset = 0.2 * vec3(float(instanceIndex % 10), 0.0, -float(instanceIndex) / 10.0);
+
+
+        vec3 worldCenter = (ubo.transform * vec4(c.bound.center,1.f)).xyz + offset;
+
+        float dist = length(ubo.cameraPosition - worldCenter);
+        
+        int lod = int(
+            step(1.0, dist) +
+            step(2.0, dist) +
+            step(4.0, dist) +
+            step(6.0, dist)
+        );
+
+
+        //Draw meshlets currentLOD times
+
+        uint currentLODchildCnt = childIndices[c.childOffset + lod];
+        uint drawOffset = c.childOffset + MAX_LOD + 1;
+        for(int i=0;i<lod;i++){
+            drawOffset += childIndices[c.childOffset + i];
+        }
+        payload.lodLevel = lod;
+        payload.drawOffset = drawOffset;
+
+        EmitMeshTasksEXT(currentLODchildCnt,1,1);
+    }
 }

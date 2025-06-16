@@ -17,13 +17,11 @@ struct FrameData {
 	//For Synchronization
 	vk::raii::Semaphore renderFinish = nullptr;
 	vk::raii::Semaphore imageAvailable = nullptr;
-	vk::raii::Semaphore computeFinish = nullptr;
 	vk::raii::Fence waitFrame = nullptr;
 
 	//For Command
 	vk::raii::CommandPool commandPool = nullptr;
 	vk::raii::CommandBuffer commandBuffer = nullptr;
-	vk::raii::CommandBuffer computeCommandBuffer = nullptr;
 
 	vk::raii::DescriptorPool descriptorPool = nullptr;
 	vk::raii::DescriptorSet descriptorSet = nullptr;

@@ -148,7 +148,7 @@ void RenderManager::initFrameDatas()
 			vk::SemaphoreCreateInfo semaphoreInfo{};
 			frameData.imageAvailable = app->context.logical.createSemaphore(semaphoreInfo);
 			frameData.renderFinish = app->context.logical.createSemaphore(semaphoreInfo);
-			frameData.computeFinish = app->context.logical.createSemaphore(semaphoreInfo);
+			
 		}
 		{
 			vk::FenceCreateInfo fenceInfo{};
@@ -248,14 +248,6 @@ void RenderManager::initFrameDatas()
 
 			app->context.logical.updateDescriptorSets(descriptorWrite, nullptr);
 			app->context.logical.updateDescriptorSets(descriptorWrite2, nullptr);
-		}
-		{
-			vk::CommandBufferAllocateInfo allocInfo{};
-			allocInfo.setLevel(vk::CommandBufferLevel::ePrimary);
-			allocInfo.setCommandBufferCount(1);
-			allocInfo.setCommandPool(*frameData.commandPool);
-
-			frameData.computeCommandBuffer = std::move(app->context.logical.allocateCommandBuffers(allocInfo).front());
 		}
 		frameDatas.push_back(std::move(frameData));
 	}
@@ -919,7 +911,7 @@ void RenderManager::updateUniform(vk::CommandBuffer commandBuffer)
 	uniformBuffer.projection = DDing::Camera::Projection;
 	uniformBuffer.transform = glm::rotate(glm::radians(90.0f), glm::vec3(1, 0, 0));
 	uniformBuffer.totalClusters = app->model.clusters.size();
-	uniformBuffer.currentLOD = app->model.LOD;
+	uniformBuffer.MaxLODCount = app->model.clusters.size() - app->model.LODOffset[app->model.MAX_LOD - 1];
 	uniformBuffer.viewFrustum = camera.viewFrustum;
 	memcpy(frameData.stagingBuffer.GetMappedPtr(), &uniformBuffer, sizeof(GlobalBuffer));
 

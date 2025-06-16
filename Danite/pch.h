@@ -26,6 +26,7 @@
 #include <functional>
 #include <cstdlib>
 #include <deque>
+#include <queue>
 #include <cstdint>
 #include <limits>
 #include <optional>
