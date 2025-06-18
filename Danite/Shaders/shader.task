@@ -99,8 +99,11 @@ bool frustumCulled(Bound bound){
     
     uint instanceIndex = globalIndex / ubo.MaxLODCount;
 
-vec3 offset = 0.2 * vec3(float(instanceIndex) / 100.0, (float(instanceIndex % 100) / 10.0), -(instanceIndex % 100) % 10);
 
+vec3 offset = 0.2 * vec3(
+(float(instanceIndex % 100) / 10.0), 
+float(instanceIndex) / 100.0, 
+(instanceIndex % 100) % 10);
     vec3 worldCenter = (ubo.transform * vec4(bound.center,1.f)).xyz + offset;
 
     vec3 globalScale = vec3(length(ubo.transform[0].xyz),
@@ -125,8 +128,12 @@ bool occlusionCulled(Bound bound){
     
     uint instanceIndex = globalIndex / ubo.MaxLODCount;
 
-vec3 offset = 0.2 * vec3(float(instanceIndex) / 100.0, (float(instanceIndex % 100) / 10.0), -(instanceIndex % 100) % 10);
 
+
+vec3 offset = 0.2 * vec3(
+(float(instanceIndex % 100) / 10.0), 
+floor(float(instanceIndex) / 100.0), 
+(instanceIndex % 100) % 10);
     vec3 worldCenter = (ubo.transform * vec4(bound.center,1.f)).xyz + offset;
 
         vec3 globalScale = vec3(length(ubo.transform[0].xyz),
@@ -236,9 +243,13 @@ void main(){
 
     bool check = isVisible(c.bound);
     if(check){	
-        vec3 offset = 0.2 * vec3(float(instanceIndex) / 100.0, (float(instanceIndex % 100) / 10.0), -(instanceIndex % 100) % 10);
 
-        vec3 worldCenter = (ubo.transform * vec4(c.bound.center,1.f)).xyz + offset;
+
+vec3 offset = 0.2 * vec3(
+(float(instanceIndex % 100) / 10.0), 
+floor(float(instanceIndex) / 100.0), 
+(instanceIndex % 100) % 10);
+vec3 worldCenter = (ubo.transform * vec4(c.bound.center,1.f)).xyz + offset;
 
         float dist = length(ubo.cameraPosition - worldCenter);
         

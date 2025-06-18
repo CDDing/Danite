@@ -118,7 +118,10 @@ void main() {
         float((clusterIndex * 97) % 255) / 255.0
     );
 
-vec3 offset = 0.2 * vec3(float(instanceIndex) / 100.0, (float(instanceIndex % 100) / 10.0), -(instanceIndex % 100) % 10);
+vec3 offset = 0.2 * vec3(
+(float(instanceIndex % 100) / 10.0), 
+floor(float(instanceIndex) / 100.0), 
+(instanceIndex % 100) % 10);
 
 
     for (uint i = gl_LocalInvocationIndex; i < m.vertex_count; i += gl_WorkGroupSize.x) {
