@@ -118,7 +118,7 @@ void main() {
         float((clusterIndex * 97) % 255) / 255.0
     );
 
-vec3 offset = 0.2 * vec3(float(instanceIndex % 10), 0.0, -float(instanceIndex) / 10.0);
+vec3 offset = 0.2 * vec3(float(instanceIndex) / 100.0, (float(instanceIndex % 100) / 10.0), -(instanceIndex % 100) % 10);
 
 
     for (uint i = gl_LocalInvocationIndex; i < m.vertex_count; i += gl_WorkGroupSize.x) {
@@ -127,7 +127,7 @@ vec3 offset = 0.2 * vec3(float(instanceIndex % 10), 0.0, -float(instanceIndex) /
         vec4 worldPos = ubo.transform * vec4(vertices[index].position, 1.0) + vec4(vec3(offset),0.0);
         gl_MeshVerticesEXT[i].gl_Position = ubo.projection * ubo.view * worldPos;
     
-        vertexOut[i].position = vertices[index].position;
+        vertexOut[i].position = worldPos.xyz;
         vertexOut[i].normal = vertices[index].normal;
         vertexOut[i].uv = vec2(vertices[index].texCoordX, vertices[index].texCoordY);
         vertexOut[i].color = vec3((float(payload.lodLevel) / 4.0) * 0.5 + 0.5);

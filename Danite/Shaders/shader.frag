@@ -92,5 +92,50 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0)
 
 // ----------------------------------------------------------------------------
 void main() {
-    outColor = vec4(inVertex.color, 1.0);
+    vec3 lightPosition = vec3(0,0.5,0);
+    vec3 albedo = inVertex.color;
+    float metallic = 0.5f, roughness = 0.5f, ao = 1.0f;
+    vec3 N = inVertex.normal;
+    vec3 V = normalize(ubo.cameraPosition - inVertex.position);
+    
+    vec3 F0 = vec3(0.04); 
+    F0 = mix(F0, albedo, metallic);
+
+    vec3 finalColor = vec3(0.0);
+    vec3 L = normalize(lightPosition - inVertex.position);
+    float attenuation = 1.0;
+    float shadow = 0.0;
+    float NdotL;
+        
+
+    vec3 H = normalize(V + L);
+    float NDF = DistributionGGX(N, H, roughness);   
+    float G   = GeometrySmith(N, V, L, roughness);      
+    vec3 F    = fresnelSchlick(max(dot(H, V), 0.0), F0);
+
+        vec3 numerator = NDF * G * F; 
+        float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001; 
+        vec3 specular = numerator / denominator;
+
+        vec3 kS = F;
+        vec3 kD = vec3(1.0) - kS;
+        kD *= 1.0 - metallic;	  
+
+        NdotL = max(dot(N, L), 0.0);        
+
+        vec3 diffuse = kD * albedo / PI;
+        
+        vec3 radiance = vec3(1.0) * NdotL * attenuation;
+
+        finalColor += (diffuse + specular) * radiance; 
+   
+    
+    vec3 ambient = vec3(0.03) * albedo * ao;
+    
+    vec3 color = ambient + finalColor;
+
+    // gamma correct
+    color = pow(color, vec3(1.0/2.2)); 
+
+    outColor = vec4(color, 1.0);
 }
